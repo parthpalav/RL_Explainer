@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { solveAll } from './index';
 import { ProblemSchema, type Problem } from '../schema';
 import { BATCH1, BATCH2 } from '../fixtures/ia1';
-import { add, chain, fmt, mul, num, toLatex } from '../math/expr';
+import { add, chain, fmt, mul, num, stepNote, toLatex } from '../math/expr';
 import type { PartTrace } from './types';
 
 /** All results keyed "table|row|col". */
@@ -16,6 +16,15 @@ const cellsOf = (pt: PartTrace) => {
   for (const st of pt.steps) for (const r of st.results) out.set(`${r.cell.table}#${r.cell.row}|${r.cell.col}`, r.value);
   return out;
 };
+/** Drops \htmlData / \htmlClass wrappers (animation markers), keeping their bodies. */
+const plain = (t: string): string => {
+  const m = /\\html(?:Data|Class)\{[^}]*\}\{/.exec(t);
+  if (!m) return t;
+  let depth = 1;
+  let j = m.index + m[0].length;
+  for (; depth; j++) depth += t[j] === '{' ? 1 : t[j] === '}' ? -1 : 0;
+  return plain(t.slice(0, m.index) + t.slice(m.index + m[0].length, j - 1) + t.slice(j));
+};
 const lastLine = (pt: PartTrace) => pt.steps.at(-1)!.lines.at(-1)!.rhs;
 
 describe('expr', () => {
@@ -23,13 +32,22 @@ describe('expr', () => {
     // 0.2(-8 + 0.9(-5.6)) + 0.8(-5 + 0.9(0.2))
     const e = add(mul(num(0.2), add(num(-8), mul(num(0.9), num(-5.6)))), mul(num(0.8), add(num(-5), mul(num(0.9), num(0.2)))));
     const lines = chain(e);
-    expect(lines.map((l) => toLatex(l).replace(/\\htmlClass\{fresh\}\{([^}]*)\}/g, '$1'))).toEqual([
+    expect(lines.map((l) => plain(toLatex(l)))).toEqual([
       '0.2 \\times \\left(-8 + 0.9 \\times \\left(-5.6\\right)\\right) + 0.8 \\times \\left(-5 + 0.9 \\times 0.2\\right)',
       '0.2 \\times \\left(-8 - 5.04\\right) + 0.8 \\times \\left(-5 + 0.18\\right)',
       '0.2 \\times \\left(-13.04\\right) + 0.8 \\times \\left(-4.82\\right)',
       '-2.608 - 3.856',
       '-6.464',
     ]);
+  });
+  it('marks each ready operation and the number it becomes with the same index', () => {
+    const e = add(mul(num(0.2), add(num(-8), mul(num(0.9), num(-5.6)))), mul(num(0.8), add(num(-5), mul(num(0.9), num(0.2)))));
+    const [l0, l1] = chain(e).map((x) => toLatex(x));
+    expect(l0.match(/op=\d/g)).toEqual(['op=0', 'op=1']);
+    expect(l1.match(/fk=\d/g)).toEqual(['fk=0', 'fk=1']);
+    expect(l1).toContain('- \\htmlData{fk=0}{\\htmlClass{fresh}{5.04}}'); // a + (-b) is written a - b
+    expect(stepNote(chain(e)[1])).toBe('Add');
+    expect(stepNote(e)).toBe('Multiply');
   });
   it('formats floats cleanly', () => {
     expect(fmt(0.1 + 0.2)).toBe('0.3');

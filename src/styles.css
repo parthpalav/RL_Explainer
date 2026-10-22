@@ -227,6 +227,7 @@ table.edit select { min-width: 66px; }
 .sw { display: inline-block; width: 9px; height: 9px; border-radius: 3px; flex: none; }
 .sw.given { background: var(--given); box-shadow: 0 0 0 3px var(--given-soft); }
 .sw.fresh { background: var(--fresh); box-shadow: 0 0 0 3px var(--fresh-soft); }
+.sw.box { background: rgb(255 180 107 / 0.16); box-shadow: 0 0 0 1.5px var(--fresh); }
 .empty { color: var(--ink-3); font-size: 13px; margin: 0; padding: 18px; border: 1px dashed var(--line-2); border-radius: 12px; text-align: center; }
 
 .graph-wrap {
@@ -314,11 +315,24 @@ td.fresh-cell .val { color: var(--fresh); font-weight: 700; }
 .formula .tag { position: absolute; top: 9px; left: 14px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); }
 .formula .katex-display { margin: 8px 0 6px; }
 .formula .katex { font-size: 1.25em; }
-.lines { display: grid; grid-template-columns: auto auto 1fr; gap: 14px 10px; align-items: center; font-size: 1.3em; padding: 4px 2px; }
+.lines { position: relative; display: grid; grid-template-columns: auto auto 1fr; gap: 14px 10px; align-items: center; font-size: 1.3em; padding: 4px 2px; }
 .line { display: contents; }
 .line .lhs { justify-self: end; color: var(--ink-2); }
 .line .eq { color: var(--ink-3); }
 .line:last-child .rhs { justify-self: start; }
+.line .rhs { white-space: nowrap; } /* never break a working line mid-sum; the card scrolls instead */
+.line .note {
+  display: inline-block; max-width: 9.5em; font: 500 11.5px/1.3 Inter, system-ui, sans-serif; color: var(--fresh);
+  text-align: right; opacity: 0.85; letter-spacing: 0.01em;
+}
+.line .note::after { content: ' →'; color: var(--ink-3); }
+.lines [data-op] { border-radius: 6px; }
+.morph-chip {
+  position: absolute; z-index: 5; pointer-events: none; display: flex; align-items: center; justify-content: center;
+  border-radius: 8px; background: rgb(255 180 107 / 0.22); border: 1.5px solid var(--fresh); color: var(--fresh);
+  font: 700 1.25em/1 'KaTeX_Main', 'Times New Roman', serif; white-space: nowrap; overflow: hidden;
+  box-shadow: 0 0 24px rgb(255 180 107 / 0.25); backdrop-filter: blur(2px);
+}
 .lines [data-src] { color: var(--given); }
 .fresh { display: inline-block; color: var(--fresh); font-weight: 700; text-shadow: 0 0 18px rgb(255 180 107 / 0.35); }
 .key { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 26px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 12px; color: var(--ink-3); }
@@ -364,10 +378,19 @@ td.fresh-cell .val { color: var(--fresh); font-weight: 700; }
 .steps li.on .n { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
 
 .fly-chip {
-  position: fixed; z-index: 1000; pointer-events: none; display: flex; align-items: center; justify-content: center;
+  position: fixed; flex-direction: column; gap: 2px; z-index: 1000; pointer-events: none; display: flex; align-items: center; justify-content: center;
   padding: 0 7px; border-radius: 7px; background: var(--given); color: #062420; font-weight: 700;
   box-shadow: 0 0 0 4px var(--given-soft), 0 10px 26px rgb(0 0 0 / 0.5); font-variant-numeric: tabular-nums;
 }
+.fly-chip .chip-tag {
+  position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); white-space: nowrap;
+  font-size: 13px; font-weight: 500; color: var(--ink); background: var(--s3); border: 1px solid var(--line-2);
+  padding: 1px 8px; border-radius: 6px; box-shadow: 0 6px 16px rgb(0 0 0 / 0.45);
+}
+.fly-chip.result { background: var(--fresh); color: #2a1503; box-shadow: 0 0 0 4px var(--fresh-soft), 0 10px 26px rgb(0 0 0 / 0.5); }
+td.land { animation: land 0.9s var(--ease); }
+@keyframes land { 0% { box-shadow: inset 0 0 0 2px var(--fresh); background: rgb(255 180 107 / 0.35); } 100% { box-shadow: inset 0 0 0 0 transparent; } }
+.graph .pulse { fill: var(--given); filter: drop-shadow(0 0 4px var(--given)); }
 
 /* predict mode */
 .predict fieldset { min-width: 0; border: 1px solid var(--line); border-radius: 12px; margin: 0 0 14px; padding: 10px 14px 12px; background: var(--s2); }
@@ -414,9 +437,10 @@ td.fresh-cell .val { color: var(--fresh); font-weight: 700; }
   .two { grid-template-columns: 1fr; }
   .card { padding: 18px 16px; min-height: 0; }
   .card h3 { font-size: 19px; }
-  .lines { font-size: 1.1em; }
+  .lines { font-size: 0.95em; gap: 12px 6px; }
   .transport { border-radius: 16px; gap: 10px; }
   .keys { display: none; }
+  .line .note { max-width: 6.5em; font-size: 10.5px; }
   .parts { flex-wrap: nowrap; overflow-x: auto; margin: 0 -16px; padding: 0 16px 2px; scrollbar-width: none; }
   .part-tab { font-size: 13px; }
   .panel { padding: 16px; }
@@ -424,6 +448,6 @@ td.fresh-cell .val { color: var(--fresh); font-weight: 700; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
-  .fly-chip { display: none; }
+  .fly-chip, .morph-chip, .graph .pulse { display: none; }
 }
 .form > button.add { justify-self: start; }

@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import gsap from 'gsap';
 import type { PartTrace, Step } from '../solvers/types';
-import { Rich, Tex } from './Tex';
+import { Rich, Tex, texHtml } from './Tex';
 import { Predict, TheoryCards, quizzable } from './Predict';
 import { F } from '../solvers/dp';
 import { Icon } from './Icon';
@@ -25,11 +25,13 @@ interface Props {
 }
 
 const SPEEDS = [0.5, 1, 1.5, 2];
+const PACE = 1.4; // 1× plays the timeline 1.4× faster than its written durations, so long Bellman steps stay brisk
 
 export function StepPlayer({ traces, flat, index, setIndex, onRevealed }: Props) {
   const card = useRef<HTMLDivElement>(null);
   const tl = useRef<gsap.core.Timeline | null>(null);
   const instant = useRef(false);
+  const flyResult = useRef(false);
   const [playing, setPlaying] = useState(false);
   const [done, setDone] = useState(false);
   const [speed, setSpeed] = useState(1);
@@ -63,46 +65,98 @@ export function StepPlayer({ traces, flat, index, setIndex, onRevealed }: Props)
       },
     });
     tl.current = t;
+    flyResult.current = !instant.current;
     const q = (s: string, el: ParentNode = root) => [...el.querySelectorAll<HTMLElement>(s)];
+    const lines = q('.line');
+    const kids = (line: HTMLElement) => [...line.children].filter((c) => !c.querySelector(':scope > .note')) as HTMLElement[];
+
+    // Measure everything before any tween moves it. Chips inside the card are positioned relative to
+    // the card, so scrolling the page mid-animation does not knock them off target.
+    const cardBox = root.getBoundingClientRect();
+    const local = (el: Element) => {
+      const r = el.getBoundingClientRect();
+      return { x: r.left - cardBox.left + root.scrollLeft, y: r.top - cardBox.top + root.scrollTop, w: r.width, h: r.height };
+    };
+    const firstSrc = lines[0] ? q('[data-src]', lines[0]).map((el) => ({ el, to: el.getBoundingClientRect(), from: document.querySelector<HTMLElement>(`[data-ref="${el.dataset.src}"]`) })) : [];
+    const morphs = lines.map((line, i) =>
+      i === 0
+        ? []
+        : q('[data-fk]', line).flatMap((f) => {
+            const op = lines[i - 1].querySelector<HTMLElement>(`[data-op="${f.dataset.fk}"]`);
+            return op ? [{ f, op, a: local(op), b: local(f) }] : [];
+          }),
+    );
 
     t.from(q('.why, .formula'), { autoAlpha: 0, y: 8, duration: 0.45, stagger: 0.25 });
     t.to({}, { duration: 0.01 }); // keeps the timeline valid when a step has no lines
-    const lines = q('.line');
+
     if (lines[0]) {
-      const targets = q('[data-src]', lines[0]);
-      t.from(lines[0], { autoAlpha: 0, duration: 0.35 }, '+=0.2');
-      if (targets.length) t.set(targets, { opacity: 0 }, '<');
-      targets.forEach((el, i) => {
-        const src = document.querySelector<HTMLElement>(`[data-ref="${el.dataset.src}"]`);
+      // 1. Substitute: every given value flies out of the data panel, labelled with what it is.
+      t.from([...kids(lines[0]), ...q('.note', lines[0])], { autoAlpha: 0, duration: 0.35 }, '+=0.2');
+      if (firstSrc.length) t.set(firstSrc.map((x) => x.el), { opacity: 0 }, '<');
+      firstSrc.forEach(({ el, to: b, from: src }, i) => {
         const at = `>${i ? -0.35 : 0.1}`;
         if (!src) {
           t.to(el, { opacity: 1, duration: 0.25 }, at);
           return;
         }
         const a = src.getBoundingClientRect();
-        const b = el.getBoundingClientRect();
         const chip = document.createElement('div');
         chip.className = 'fly-chip';
-        chip.textContent = src.textContent;
+        chip.innerHTML = `${src.dataset.tex ? `<span class="chip-tag">${texHtml(src.dataset.tex)}</span>` : ''}<span>${src.textContent}</span>`;
         Object.assign(chip.style, { left: `${a.left}px`, top: `${a.top}px`, minWidth: `${a.width}px`, height: `${a.height}px` });
         document.body.appendChild(chip);
         chips.push(chip);
         gsap.set(chip, { autoAlpha: 0 });
         t.call(() => src.classList.add('src-flash'), [], at)
           .set(chip, { autoAlpha: 1 }, '<')
-          .to(chip, { x: b.left - a.left, y: b.top - a.top, duration: 0.7, ease: 'power2.inOut' }, '<')
+          .to(chip, { x: b.left - a.left, y: b.top - a.top, duration: 0.8, ease: 'power2.inOut' }, '<')
           .set(el, { opacity: 1 })
           .to(chip, { autoAlpha: 0, duration: 0.15 }, '<')
           .call(() => src.classList.remove('src-flash'));
       });
     }
-    lines.slice(1).forEach((line) => {
-      t.from(line, { autoAlpha: 0, y: 10, duration: 0.4 }, '+=0.45');
-      const fresh = q('.fresh', line);
-      if (fresh.length) t.from(fresh, { scale: 1.35, duration: 0.45, ease: 'back.out(3)' }, '<0.1');
+
+    lines.slice(1).forEach((line, j) => {
+      const pairs = morphs[j + 1];
+      const label = `line${j + 1}`;
+      t.addLabel(label, '+=0.3');
+      if (!pairs.length) {
+        // Not an arithmetic chain (e.g. a pick or a rearranged equation): just reveal it.
+        t.from([...kids(line), ...q('.note', line)], { autoAlpha: 0, y: 10, duration: 0.4 }, label);
+        const fresh = q('.fresh', line);
+        if (fresh.length) t.from(fresh, { scale: 1.35, duration: 0.45, ease: 'back.out(3)' }, '<0.1');
+        return;
+      }
+      // 2. Point at the work: box each operation that is ready to be worked out, and say what it is.
+      const ops = pairs.map((p) => p.op);
+      t.from(q('.note', line), { autoAlpha: 0, x: -6, duration: 0.3 }, label)
+        .to(ops, { backgroundColor: 'rgba(255,180,107,0.16)', boxShadow: '0 0 0 1.5px rgba(255,180,107,0.8)', duration: 0.3, stagger: 0.1 }, label)
+        .to({}, { duration: 0.25 });
+      // 3. Work it out: each boxed operation shrinks into the number it becomes on the next line.
+      const results = pairs.map((p) => p.f);
+      t.from(kids(line), { autoAlpha: 0, y: 6, duration: 0.35 }).set(results, { opacity: 0 }, '<');
+      const base = t.duration() - 0.1;
+      pairs.forEach(({ f, a, b }, k) => {
+        const chip = document.createElement('div');
+        chip.className = 'morph-chip';
+        chip.textContent = f.textContent;
+        Object.assign(chip.style, { left: `${a.x}px`, top: `${a.y}px`, width: `${a.w}px`, height: `${a.h}px` });
+        root.appendChild(chip);
+        chips.push(chip);
+        gsap.set(chip, { autoAlpha: 0 });
+        const s0 = base + k * 0.15; // chips overlap a little so long lines do not drag
+        t.set(chip, { autoAlpha: 1 }, s0)
+          .from(chip, { scale: 0.9, duration: 0.2 }, s0)
+          .to(chip, { x: b.x - a.x, y: b.y - a.y, width: b.w, height: b.h, duration: 0.6, ease: 'power2.inOut' }, s0 + 0.15)
+          .set(f, { opacity: 1 }, s0 + 0.75)
+          .to(chip, { autoAlpha: 0, duration: 0.2 }, s0 + 0.75)
+          .from(f.querySelector('.fresh') ?? f, { scale: 1.3, duration: 0.4, ease: 'back.out(3)' }, s0 + 0.75);
+      });
+      t.to(ops, { backgroundColor: 'rgba(255,180,107,0)', boxShadow: '0 0 0 0px rgba(255,180,107,0)', duration: 0.3 });
     });
 
-    t.timeScale(speed);
+    t.timeScale(speed * PACE);
     if (instant.current) t.progress(1);
     instant.current = false;
     return () => {
@@ -115,8 +169,44 @@ export function StepPlayer({ traces, flat, index, setIndex, onRevealed }: Props)
   }, [index, flat, waiting]);
 
   useEffect(() => {
-    tl.current?.timeScale(speed);
+    tl.current?.timeScale(speed * PACE);
   }, [speed]);
+
+  // 4. Record: once the working is done, the answer flies from the last line into the worked-values table.
+  useEffect(() => {
+    if (!done || !flyResult.current) return;
+    flyResult.current = false;
+    const from = card.current?.querySelector('.line:last-child .rhs .katex');
+    const cells = [...document.querySelectorAll<HTMLElement>('.results td.fresh-cell .val')];
+    if (!from || !cells.length || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const t = gsap.timeline();
+    const chips: HTMLElement[] = [];
+    cells.forEach((cell, i) => {
+      const panel = cell.closest<HTMLElement>('.results');
+      if (panel && getComputedStyle(panel).position === 'sticky') cell.scrollIntoView({ block: 'nearest' });
+      const a = from.getBoundingClientRect();
+      const b = cell.getBoundingClientRect();
+      if (b.bottom < 0 || b.top > innerHeight) return; // table is off screen (phones): nothing to see
+      const chip = document.createElement('div');
+      chip.className = 'fly-chip result';
+      chip.textContent = cell.textContent;
+      Object.assign(chip.style, { left: `${a.left}px`, top: `${a.top + a.height / 2 - b.height / 2}px`, minWidth: `${b.width}px`, height: `${b.height}px` });
+      document.body.appendChild(chip);
+      chips.push(chip);
+      const td = cell.parentElement!;
+      t.fromTo(chip, { autoAlpha: 0, scale: 1.2 }, { autoAlpha: 1, scale: 1, duration: 0.2 }, i * 0.1)
+        .to(chip, { x: b.left - a.left, y: b.top - (a.top + a.height / 2 - b.height / 2), duration: 0.75, ease: 'power2.inOut' }, '>')
+        .call(() => td.classList.add('land'))
+        .to(chip, { autoAlpha: 0, duration: 0.2 }, '<');
+    });
+    t.timeScale(speed * PACE);
+    return () => {
+      t.kill();
+      chips.forEach((c) => c.remove());
+      document.querySelectorAll('.results td.land').forEach((e) => e.classList.remove('land'));
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [done]);
 
   useEffect(() => {
     if (!playing || !done || waiting) return;
@@ -203,7 +293,8 @@ export function StepPlayer({ traces, flat, index, setIndex, onRevealed }: Props)
                 <div className="lines">
                   {step.lines.map((l, i) => (
                     <div className="line" key={i}>
-                      <span className="lhs">{l.lhs && <Tex tex={l.lhs} />}</span>
+                      {/* continuation lines have no lhs, so their margin note sits there, like on paper */}
+                      <span className="lhs">{l.lhs ? <Tex tex={l.lhs} /> : l.note && <span className="note">{l.note}</span>}</span>
                       <span className="eq"><Tex tex="=" /></span>
                       <span className="rhs"><Tex tex={l.rhs} /></span>
                     </div>
@@ -214,6 +305,7 @@ export function StepPlayer({ traces, flat, index, setIndex, onRevealed }: Props)
               {step.lines.length > 0 && (
                 <footer className="key">
                   <span><i className="sw given" /> value plugged in from the question or an earlier step</span>
+                  <span><i className="sw box" /> being worked out</span>
                   <span><i className="sw fresh" /> just calculated</span>
                 </footer>
               )}

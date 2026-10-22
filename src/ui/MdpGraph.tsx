@@ -69,6 +69,14 @@ export function MdpGraph({ p, active = [] }: { p: Problem; active?: string[] }) 
       {edges.map(({ k, d }) => (
         <path key={k} d={d} className={`edge ${on.has(k) ? 'on' : ''}`} markerEnd={`url(#${on.has(k) ? 'arr-on' : 'arr'})`} />
       ))}
+      {edges
+        .filter(({ k }) => on.has(k))
+        .map(({ k, d }) => (
+          // a dot travelling s -> s' shows which way the probability flows
+          <circle key={`dot${k}`} r={4} className="pulse">
+            <animateMotion dur="1.6s" repeatCount="indefinite" path={d} />
+          </circle>
+        ))}
       {p.states.map((s) => {
         const { x, y } = pos.get(s.id)!;
         const term = p.terminal.includes(s.id);

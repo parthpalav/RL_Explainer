@@ -3,7 +3,7 @@
 import type { Problem } from '../schema';
 import type { Cell, Line, Step } from './types';
 import { REF_GAMMA, cellRef, edgesOf, idTex, nonTerminal, outcomes, refP, refPi, refR } from '../mdp';
-import { add, chain, div, fmt, mul, num, safeRef, toLatex } from '../math/expr';
+import { add, div, fmt, mul, noteLines, num, safeRef } from '../math/expr';
 
 type LF = { c: number; co: Map<string, number> }; // c + sum co[s] V(s)
 
@@ -124,7 +124,7 @@ export function solveLinear(
         { lhs: `${fmt(1 - a)}\\,${vt(x)}`, rhs: lfTex(rest) },
       ];
       if (numeric) {
-        chain(div(num(rest.c), num(1 - a))).forEach((e, i) => lines.push({ lhs: i ? undefined : vt(x), rhs: toLatex(e) }));
+        lines.push(...noteLines(vt(x), div(num(rest.c), num(1 - a))));
       } else {
         lines.push({ lhs: vt(x), rhs: `\\dfrac{${lfTex(rest)}}{${fmt(1 - a)}}` }, { rhs: lfTex(res) });
       }
@@ -175,7 +175,7 @@ export function solveLinear(
     steps.push({
       title: `Back-substitute to get $${vt(x)}$`,
       why: 'Every value this expression depends on is now known. Plug them in.',
-      lines: [{ lhs: vt(x), rhs: lfTex(ix) }, ...chain(e).map((ex) => ({ rhs: toLatex(ex) }))],
+      lines: [{ lhs: vt(x), rhs: lfTex(ix) }, ...noteLines(undefined, e)],
       results: [{ cell: cell(x), value: v }],
     });
   }

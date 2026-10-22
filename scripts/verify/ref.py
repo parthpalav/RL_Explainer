@@ -297,12 +297,15 @@ def expect_mf(p, part, ctx):
 
 # ---------- LaTeX line -> python expression ----------
 def unwrap(s, cmd):
-    # \cmd{arg}{body} -> body  (args/bodies without nested braces beyond one level handled by loop)
-    pat = re.compile(re.escape(cmd) + r'\{[^{}]*\}\{([^{}]*)\}')
-    while True:
-        s2 = pat.sub(r'\1', s)
-        if s2 == s: return s
-        s = s2
+    # \cmd{arg}{body} -> body, brace-matched so bodies may hold \dfrac{..}{..} etc.
+    head = re.compile(re.escape(cmd) + r'\{[^{}]*\}\{')
+    while (m := head.search(s)):
+        depth, j = 1, m.end()
+        while depth:
+            depth += {'{': 1, '}': -1}.get(s[j], 0)
+            j += 1
+        s = s[:m.start()] + s[m.end():j - 1] + s[j:]
+    return s
 def latex_value(rhs):
     s = unwrap(unwrap(rhs, r'\htmlData'), r'\htmlClass')
     if re.search(r'[A-Za-z]_|V\(|Q\(|\\arg|\\underset|\\infty|\\text|\\\{|\\le|>|\\hat|\\pi', s): return None
@@ -428,7 +431,7 @@ if __name__ == '__main__':
                     tail = lasts[-len(last):]
                     for a, b in zip(tail, last):
                         stats['cells'] += 1
-                        ok = a == b if isinstance(b, str) else abs(float(re.sub(r'\\htmlClass\{fresh\}\{([^}]*)\}', r'\1', a)) - b) < 1e-3
+                        ok = a == b if isinstance(b, str) else abs(float(unwrap(unwrap(a, r'\htmlData'), r'\htmlClass')) - b) < 1e-3
                         if not ok:
                             stats['cell_bad'] += 1
                             if shown < 15: print('LAST MISMATCH', part['task'], a, b); shown += 1

@@ -85,49 +85,92 @@ export const safeRef = (s: string) =>
 
 const PREC: Record<Expr['k'], number> = { add: 1, sub: 1, mul: 2, div: 2, pow: 3, num: 4, max: 4, sqrt: 4, ln: 4 };
 
-function numTex(e: Extract<Expr, { k: 'num' }>, v = e.v): string {
+/**
+ * Animation markers. In line i every "ready" operation (all operands are numbers) is tagged op=k;
+ * in line i+1 the number it became is tagged fk=k. Both count in the same left-to-right order as
+ * reduceOnce, so the player can shrink each boxed operation into its result.
+ */
+type Marks = { op: number; fresh: number };
+
+function numTex(e: Extract<Expr, { k: 'num' }>, m: Marks, v = e.v): string {
   let t = fmt(v);
   if (e.src) t = `\\htmlData{src=${safeRef(e.src)}}{${t}}`;
-  if (e.fresh) t = `\\htmlClass{fresh}{${t}}`;
+  if (e.fresh) t = `\\htmlData{fk=${m.fresh++}}{\\htmlClass{fresh}{${t}}}`;
   return t;
 }
 
 const paren = (t: string) => `\\left(${t}\\right)`;
 
-export function toLatex(e: Expr, parent = 0): string {
+export function toLatex(e: Expr, parent = 0, m: Marks = { op: 0, fresh: 0 }): string {
+  if (e.k === 'num' || !kids(e).every((x) => x.k === 'num')) return body(e, parent, m);
+  const k = m.op++;
+  return `\\htmlData{op=${k}}{${body(e, parent, m)}}`;
+}
+
+function body(e: Expr, parent: number, m: Marks): string {
   const self = PREC[e.k];
   let t: string;
   switch (e.k) {
     case 'num':
-      t = numTex(e);
+      t = numTex(e, m);
       return e.v < 0 && parent > 0 ? paren(t) : t;
     case 'add':
       // a + (-b) is written a - b, like on paper
       t = e.xs
         .map((x, i) => {
-          if (i === 0) return x.k === 'num' ? numTex(x) : toLatex(x, 1);
-          if (x.k === 'num' && x.v < 0) return ` - ${numTex(x, -x.v)}`;
-          return ` + ${toLatex(x, 1)}`;
+          if (i === 0) return x.k === 'num' ? numTex(x, m) : toLatex(x, 1, m);
+          if (x.k === 'num' && x.v < 0) return ` - ${numTex(x, m, -x.v)}`;
+          return ` + ${toLatex(x, 1, m)}`;
         })
         .join('');
       break;
     case 'sub':
-      t = `${toLatex(e.a, 1)} - ${toLatex(e.b, 2)}`;
+      t = `${toLatex(e.a, 1, m)} - ${toLatex(e.b, 2, m)}`;
       break;
     case 'mul':
-      t = e.xs.map((x) => toLatex(x, 2)).join(' \\times ');
+      t = e.xs.map((x) => toLatex(x, 2, m)).join(' \\times ');
       break;
     case 'div':
-      return `\\dfrac{${toLatex(e.a)}}{${toLatex(e.b)}}`;
+      return `\\dfrac{${toLatex(e.a, 0, m)}}{${toLatex(e.b, 0, m)}}`;
     case 'pow':
-      t = `${toLatex(e.a, 4)}^{${toLatex(e.b)}}`;
+      t = `${toLatex(e.a, 4, m)}^{${toLatex(e.b, 0, m)}}`;
       break;
     case 'max':
-      return `\\max\\left(${e.xs.map((x) => toLatex(x)).join(',\\ ')}\\right)`;
+      return `\\max\\left(${e.xs.map((x) => toLatex(x, 0, m)).join(',\\ ')}\\right)`;
     case 'sqrt':
-      return `\\sqrt{${toLatex(e.x)}}`;
+      return `\\sqrt{${toLatex(e.x, 0, m)}}`;
     case 'ln':
-      return `\\ln${paren(toLatex(e.x))}`;
+      return `\\ln${paren(toLatex(e.x, 0, m))}`;
   }
   return self < parent ? paren(t) : t;
 }
+
+const VERB: Record<Exclude<Expr['k'], 'num'>, string> = {
+  add: 'add', sub: 'subtract', mul: 'multiply', div: 'divide', pow: 'raise to the power',
+  max: 'take the largest', sqrt: 'take the square root', ln: 'take the natural log',
+};
+
+/** Margin note for the line after e: which operations get worked out next, e.g. "Multiply and add". */
+export function stepNote(e: Expr): string {
+  const verbs = new Set<string>();
+  const walk = (x: Expr) => {
+    if (x.k === 'num') return;
+    const c = kids(x);
+    if (c.every((y) => y.k === 'num')) verbs.add(VERB[x.k]);
+    else c.forEach(walk);
+  };
+  walk(e);
+  const v = [...verbs];
+  const s = v.length > 1 ? `${v.slice(0, -1).join(', ')} and ${v.at(-1)}` : v[0] ?? '';
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/** Working lines for lhs = e, each with the note a teacher would write in the margin. */
+export const noteLines = (lhs: string | undefined, e: Expr) =>
+  chain(e).map((x, i, all) => ({
+    lhs: i ? undefined : lhs,
+    rhs: toLatex(x),
+    note: i ? stepNote(all[i - 1]) : hasSrc(x) ? 'Substitute the values' : undefined,
+  }));
+
+const hasSrc = (e: Expr): boolean => (e.k === 'num' ? !!e.src : kids(e).some(hasSrc));

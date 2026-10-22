@@ -34,6 +34,30 @@ export const focusPull = (i: number) => `pull|${i}`;
 export const cellRef = (c: Cell) => `cell|${c.table}|${c.row}|${c.col}`;
 export const domRef = (r: string) => safeRef(r);
 
+/** What a referenced number is, as LaTeX, so a flying value can say where it came from. */
+export function refTex(r: string): string {
+  const [k, ...x] = r.split('|');
+  const i = (j: number) => idTex(x[j]);
+  switch (k) {
+    case 'P': return `P(${i(2)} \\mid ${i(0)}, ${i(1)})`;
+    case 'R': return `R(${i(0)}, ${i(1)}, ${i(2)})`;
+    case 'Q': return `Q(${i(0)}, ${i(1)})`;
+    case 'QT': return `\\hat{Q}(${i(0)}, ${i(1)})`;
+    case 'pi': return `\\pi(${i(1)} \\mid ${i(0)})`;
+    case 'b': return `b(${i(1)} \\mid ${i(0)})`;
+    case 'gamma': return '\\gamma';
+    case 'epsilon': return '\\varepsilon';
+    case 'alpha': return '\\alpha';
+    case 'c': case 't': case 'n': return k;
+    case 'rep': return `r_{${+x[0] + 1}}`;
+    case 'ep': return `R_{${+x[1] + 1}}\\ (\\text{ep } ${+x[0] + 1})`;
+    case 'pull': return `r_{\\#${+x[0] + 1}}`;
+    case 'arm': return `${{ q: 'Q', n: 'N', wins: '\\text{wins}' }[x[1]] ?? x[1]}(${i(0)})`;
+    case 'cell': return `${x.at(-1)}\\ (${x.at(-2)})`; // column (row), e.g. S_1 (k = 1)
+    default: return '';
+  }
+}
+
 export const edgeKey = (s: string, a: string, s2: string) => `${s}|${a}|${s2}`;
 
 export const nonTerminal = (p: Problem) => p.states.map((s) => s.id).filter((s) => !p.terminal.includes(s));

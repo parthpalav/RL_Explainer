@@ -8,6 +8,9 @@ const OPTS: katex.KatexOptions = {
   trust: (c) => c.command === '\\htmlData' || c.command === '\\htmlClass',
 };
 
+/** KaTeX HTML for places outside React, e.g. the labels on flying value chips. */
+export const texHtml = (tex: string) => katex.renderToString(tex, OPTS);
+
 export function Tex({ tex, display = false, className = '' }: { tex: string; display?: boolean; className?: string }) {
   const html = useMemo(() => katex.renderToString(tex, { ...OPTS, displayMode: display }), [tex, display]);
   return <span className={`tex ${className}`} dangerouslySetInnerHTML={{ __html: html }} />;

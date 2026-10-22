@@ -11,6 +11,7 @@ export interface Cell {
 export interface Line {
   lhs?: string;
   rhs: string;
+  note?: string; // margin note, e.g. "Multiply and add"
 }
 
 export interface Step {

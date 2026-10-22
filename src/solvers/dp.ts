@@ -5,7 +5,7 @@ import type { Cell, Ctx, Line, Solver, Step } from './types';
 import {
   REF_EPS, REF_GAMMA, actionsIn, cellRef, edgesOf, idTex, initialV, label, nonTerminal, policyAt, qExpr, refPi, refQ, targetStates,
 } from '../mdp';
-import { add, chain, div, evaluate, fmt, mul, num, pow, max, safeRef, sub, toLatex, type Expr } from '../math/expr';
+import { noteLines, add, div, evaluate, fmt, mul, num, pow, max, safeRef, sub, type Expr } from '../math/expr';
 import { solveLinear } from './linear';
 import { cardsFor } from '../content/theory';
 
@@ -38,7 +38,7 @@ const nm = (p: Problem, id: string) => (label(p, id) ? ` (${label(p, id)})` : ''
 const vCell = (table: string, row: string, s: string): Cell => ({ table, row, col: sT(s) });
 const qCell = (table: string, s: string, a: string): Cell => ({ table, row: sT(s), col: sT(a) });
 
-export const exprLines = (lhs: string, e: Expr): Line[] => chain(e).map((x, i) => ({ lhs: i ? undefined : lhs, rhs: toLatex(x) }));
+export const exprLines = (lhs: string, e: Expr): Line[] => noteLines(lhs, e);
 
 const tagged = (v: number, src: string) => `\\htmlData{src=${safeRef(src)}}{${fmt(v)}}`;
 

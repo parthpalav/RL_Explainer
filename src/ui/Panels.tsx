@@ -2,14 +2,14 @@ import type { ReactNode } from 'react';
 import type { Problem } from '../schema';
 import type { Cell } from '../solvers/types';
 import {
-  REF_ALPHA, REF_C, REF_EPS, REF_GAMMA, REF_N, REF_T, cellRef, refB, refQT, refReplay, domRef, edgeKey, focusEp, focusPull, idTex, refArm, refEpR, refP, refPi, refPull, refQ, refR,
+  REF_ALPHA, REF_C, REF_EPS, REF_GAMMA, REF_N, REF_T, cellRef, refB, refTex, refQT, refReplay, domRef, edgeKey, focusEp, focusPull, idTex, refArm, refEpR, refP, refPi, refPull, refQ, refR,
 } from '../mdp';
 import { fmt } from '../math/expr';
 import { Tex } from './Tex';
 import { MdpGraph } from './MdpGraph';
 
 const Num = ({ r, v }: { r: string; v: number }) => (
-  <span className="val" data-ref={domRef(r)}>
+  <span className="val" data-ref={domRef(r)} data-tex={refTex(r)}>
     {fmt(v)}
   </span>
 );
@@ -212,7 +212,7 @@ export function ResultsPanel({ shown }: { shown: Shown[] }) {
                   return (
                     <td key={c} className={s?.fresh ? 'fresh-cell' : ''}>
                       {s && (
-                        <span className="val" data-ref={domRef(cellRef(s.cell))}>
+                        <span className="val" data-ref={domRef(cellRef(s.cell))} data-tex={refTex(cellRef(s.cell))}>
                           {typeof s.value === 'number' ? fmt(s.value) : <Tex tex={s.value} />}
                         </span>
                       )}
