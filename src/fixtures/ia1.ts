@@ -1,6 +1,6 @@
 // IA1 example questions. The original question papers were not in the docx files,
 // so the text is rebuilt from the given data in the solutions.
-import type { Problem } from '../schema';
+import { problem } from '../schema';
 
 export const BATCH1_TEXT = `A smart irrigation agent manages soil moisture. States: S1 (Dry), S2 (Moderate), S3 (Wet). Actions: A1, A2 (Irrigate 20 mm). Discount factor γ = 0.9. Initial values V0(S1) = V0(S2) = V0(S3) = 0. The agent follows policy π(S1) = A1, π(S2) = A1, π(S3) = A1.
 Under A1:
@@ -20,7 +20,7 @@ a) Apply policy iteration for 2 iterations starting from π0(S1) = A1, π0(S2) =
 b) Apply value iteration for 2 iterations starting from V0 = 0.
 c) Differentiate between policy iteration and value iteration.`;
 
-export const BATCH1: Problem = {
+export const BATCH1 = problem({
   title: 'IA1 Batch 1: Smart irrigation',
   states: [
     { id: 'S1', name: 'Dry' },
@@ -63,9 +63,9 @@ export const BATCH1: Problem = {
     { label: 'd', task: 'greedy_action', states: ['S1'], rewards: [], text: 'Greedy action in S1.' },
     { label: 'e', task: 'epsilon_greedy_probs', states: ['S1'], rewards: [], text: 'ε-greedy action probabilities in S1 (ε = 0.2).' },
   ],
-};
+});
 
-export const BATCH2: Problem = {
+export const BATCH2 = problem({
   title: 'IA1 Batch 2: Image quality',
   states: [
     { id: 'S1', name: 'Good quality' },
@@ -97,9 +97,14 @@ export const BATCH2: Problem = {
     { label: 'b', task: 'value_iteration', iterations: 2, states: [], rewards: [], text: 'Value iteration, 2 iterations.' },
     { label: 'c', task: 'theory', states: [], rewards: [], text: 'Differentiate between policy iteration and value iteration.' },
   ],
-};
+});
+
+import { FEWSHOT, FEWSHOT_BANDIT, FEWSHOT_BANDIT_TEXT, FEWSHOT_MF, FEWSHOT_MF_TEXT, FEWSHOT_TEXT } from './fewshot';
 
 export const EXAMPLES = [
   { name: 'IA1 Batch 1: Smart irrigation', text: BATCH1_TEXT, problem: BATCH1 },
   { name: 'IA1 Batch 2: Image quality', text: BATCH2_TEXT, problem: BATCH2 },
+  { name: 'Practice: DP basics (robot battery)', text: FEWSHOT_TEXT, problem: FEWSHOT },
+  { name: 'Practice: MC, TD, SARSA, Q-learning', text: FEWSHOT_MF_TEXT, problem: FEWSHOT_MF },
+  { name: 'Practice: bandits', text: FEWSHOT_BANDIT_TEXT, problem: FEWSHOT_BANDIT },
 ];

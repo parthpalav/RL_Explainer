@@ -69,7 +69,7 @@ export default function App() {
         </main>
       ) : (
         <main className="solve-layout">
-          <DataPanel p={solved} active={flat[index]?.step.edges ?? []} />
+          <DataPanel p={solved} active={flat[index]?.step.edges ?? []} focus={flat[index]?.step.focus} />
           <StepPlayer traces={traces} flat={flat} index={index} setIndex={setIndex} onRevealed={setRevealed} />
           <ResultsPanel shown={shown} />
         </main>

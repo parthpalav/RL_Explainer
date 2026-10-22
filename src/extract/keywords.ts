@@ -4,6 +4,17 @@ import { HEADINGS } from '../solvers';
 
 // Most specific first: "ε-greedy" must win over "greedy", "policy iteration" over "policy".
 const RULES: [Task, RegExp][] = [
+  ['mc_control_epsilon_greedy', /monte[-\s]?carlo\s+control|\bMC\s+control/i],
+  ['mc_prediction_every_visit', /every[-\s]visit/i],
+  ['mc_prediction_first_visit', /first[-\s]visit|monte[-\s]?carlo/i],
+  ['sarsa', /\bsarsa\b/i],
+  ['q_learning', /\bq[-\s]?learning\b/i],
+  ['td0_prediction', /\bTD\s*\(\s*0\s*\)|temporal[-\s]difference|\bTD\b/i],
+  ['bandit_ucb', /\bUCB\b|upper\s+confidence/i],
+  ['ab_test', /\bA\/B\b|conversion/i],
+  ['bandit_incremental', /incremental/i],
+  ['bandit_epsilon_greedy', /(ε|epsilon|e)\s*-?\s*greedy[\s\S]*\b(arm|bandit)s?\b|\b(arm|bandit)s?\b[\s\S]*(ε|epsilon|e)\s*-?\s*greedy/i],
+  ['bandit_sample_average', /sample[-\s]average|average\s+reward/i],
   ['policy_iteration', /policy\s+iteration/i],
   ['value_iteration', /value\s+iteration/i],
   ['policy_evaluation_inplace', /in[-\s]?place|asynchronous|gauss[-\s]?seidel/i],
@@ -25,6 +36,9 @@ const SAME: Task[][] = [
   ['policy_evaluation', 'bellman_v', 'policy_evaluation_inplace', 'policy_evaluation_linear'],
   ['value_iteration', 'bellman_optimality'],
   ['policy_improvement', 'q_from_v', 'greedy_action'],
+  ['mc_prediction_first_visit', 'mc_prediction_every_visit'],
+  ['bandit_epsilon_greedy', 'epsilon_greedy_probs'],
+  ['bandit_sample_average', 'bandit_incremental'],
 ];
 
 // "Differentiate policy iteration and value iteration" names algorithms but asks for theory.
@@ -52,6 +66,6 @@ export function splitParts(text: string): Part[] {
   const marks = [...text.matchAll(re)];
   return marks.map((m, i) => {
     const body = text.slice(m.index! + m[0].length, marks[i + 1]?.index ?? text.length).trim();
-    return { label: m[1], task: detectTasks(body)[0] ?? 'theory', states: [], rewards: [], text: body };
+    return { label: m[1], task: detectTasks(body)[0] ?? 'theory', states: [], rewards: [], episodes: [], text: body };
   });
 }

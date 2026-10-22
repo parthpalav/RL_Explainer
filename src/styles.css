@@ -158,3 +158,17 @@ td.fresh-cell { background: var(--fresh-soft); font-weight: 700; color: var(--fr
 .extract .err { background: var(--bad-soft); color: var(--bad); }
 button.link { border: none; background: none; padding: 0; color: inherit; text-decoration: underline; }
 code { font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+/* episodes and bandit pulls */
+.timeline { margin: 10px 0; }
+.timeline h3 { font-size: 13px; margin-bottom: 4px; }
+.episode { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 4px 0; border-bottom: 1px dashed var(--line); font-size: 13.5px; }
+.ep-label { font-weight: 600; color: var(--muted); margin-right: 4px; }
+.ep-step { display: inline-flex; align-items: center; gap: 4px; border-radius: 6px; padding: 1px 3px; }
+.ep-step.on, .pull.on { background: var(--accent-soft); outline: 2px solid var(--accent); }
+.st { border: 1.5px solid var(--ink); border-radius: 999px; padding: 0 6px; }
+.st.end { border-style: dashed; color: var(--muted); }
+.tr { color: var(--muted); }
+.pulls { display: flex; flex-wrap: wrap; gap: 6px; }
+.pull { border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; font-size: 13.5px; }
+.ep-end { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: -6px 0 12px; padding: 0 10px; }

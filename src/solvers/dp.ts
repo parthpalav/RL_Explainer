@@ -8,7 +8,7 @@ import {
 import { add, chain, div, evaluate, fmt, mul, num, pow, max, safeRef, sub, toLatex, type Expr } from '../math/expr';
 import { solveLinear } from './linear';
 
-const F = {
+export const F = {
   peDet: String.raw`V_{k+1}(s) = \sum_{s'} P(s'\mid s,\pi(s))\,\big[R(s,\pi(s),s') + \gamma\,V_k(s')\big]`,
   peSto: String.raw`V_{k+1}(s) = \sum_{a}\pi(a\mid s)\sum_{s'} P(s'\mid s,a)\,\big[R(s,a,s') + \gamma\,V_k(s')\big]`,
   q: String.raw`Q(s,a) = \sum_{s'} P(s'\mid s,a)\,\big[R(s,a,s') + \gamma\,V(s')\big]`,
@@ -42,7 +42,7 @@ export const exprLines = (lhs: string, e: Expr): Line[] => chain(e).map((x, i) =
 const tagged = (v: number, src: string) => `\\htmlData{src=${safeRef(src)}}{${fmt(v)}}`;
 
 /** argmax written so each number is labelled with its action underneath. */
-function argmaxLines(lhs: string, rhsSym: string, items: { id: string; v: number; src: string }[], prefer?: string) {
+export function argmaxLines(lhs: string, rhsSym: string, items: { id: string; v: number; src: string }[], prefer?: string) {
   const best = Math.max(...items.map((x) => x.v));
   const winners = items.filter((x) => Math.abs(x.v - best) < 1e-9);
   const pick = winners.find((x) => x.id === prefer) ?? winners[0];
@@ -291,6 +291,15 @@ function qTable(p: Problem, states: string[]) {
   });
 }
 
+/** 1 - ε + ε/|A| for the greedy action, ε/|A| otherwise. */
+export const epsProb = (greedy: boolean, eps: number, nA: number): Expr =>
+  greedy ? add(sub(num(1), num(eps, REF_EPS)), div(num(eps, REF_EPS), num(nA))) : div(num(eps, REF_EPS), num(nA));
+
+export const EPS_WHY = {
+  greedy: 'With probability 1 − ε we exploit (pick a*). With probability ε we explore uniformly, and a* can be picked then too, adding ε/|A|.',
+  other: (a: string) => `${a} is only picked while exploring: probability ε spread evenly over |A| actions.`,
+};
+
 const greedyAction: Solver = (p, part) =>
   qTable(p, part.states).map(({ s, items }) => {
     const { lines } = argmaxLines(`\\pi_{\\text{greedy}}(${sT(s)})`, `\\arg\\max_a Q(${sT(s)}, a)`, items);
@@ -319,12 +328,10 @@ const epsilonGreedy: Solver = (p, part) => {
     });
     for (const { id } of items) {
       const isG = id === g.pick;
-      const e: Expr = isG ? add(sub(num(1), num(eps, REF_EPS)), div(num(eps, REF_EPS), num(nA))) : div(num(eps, REF_EPS), num(nA));
+      const e = epsProb(isG, eps, nA);
       steps.push({
         title: `$P(${sT(id)} \\mid ${sT(s)})$: ${isG ? 'greedy' : 'non-greedy'} action`,
-        why: isG
-          ? `With probability 1 − ε we exploit (pick a*). With probability ε we explore uniformly, and a* can be picked then too, adding ε/|A|.`
-          : `${id} is only picked while exploring: probability ε spread evenly over |A| actions.`,
+        why: isG ? EPS_WHY.greedy : EPS_WHY.other(id),
         formula: F.eps,
         lines: exprLines(`P(${sT(id)} \\mid ${sT(s)})`, e),
         results: [{ cell: qCell(T.eps, s, id), value: evaluate(e) }],

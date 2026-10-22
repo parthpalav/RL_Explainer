@@ -1,6 +1,8 @@
 import type { Problem } from '../schema';
 import type { Cell } from '../solvers/types';
-import { REF_EPS, REF_GAMMA, cellRef, domRef, edgeKey, idTex, refP, refPi, refQ, refR } from '../mdp';
+import {
+  REF_ALPHA, REF_C, REF_EPS, REF_GAMMA, REF_T, cellRef, domRef, edgeKey, focusEp, focusPull, idTex, refArm, refEpR, refP, refPi, refPull, refQ, refR,
+} from '../mdp';
 import { fmt } from '../math/expr';
 import { Tex } from './Tex';
 import { MdpGraph } from './MdpGraph';
@@ -12,23 +14,81 @@ const Num = ({ r, v }: { r: string; v: number }) => (
 );
 
 /** Everything given in the question. Each number carries data-ref so formulas can fly values out of it. */
-export function DataPanel({ p, active }: { p: Problem; active: string[] }) {
+export function DataPanel({ p, active, focus }: { p: Problem; active: string[]; focus?: string }) {
   const on = new Set(active);
+  const chip = (tex: string, r: string, v: number | undefined) =>
+    v !== undefined && (
+      <span className="chip">
+        <Tex tex={tex} /> = <Num r={r} v={v} />
+      </span>
+    );
   return (
     <aside className="panel data">
       <h2>Given</h2>
-      <MdpGraph p={p} active={active} />
+      {p.transitions.length > 0 && <MdpGraph p={p} active={active} />}
       <div className="chips">
-        <span className="chip">
-          <Tex tex="\gamma" /> = <Num r={REF_GAMMA} v={p.gamma} />
-        </span>
-        {p.epsilon !== undefined && (
-          <span className="chip">
-            <Tex tex="\varepsilon" /> = <Num r={REF_EPS} v={p.epsilon} />
-          </span>
-        )}
+        {(p.transitions.length > 0 || p.episodes.length > 0) && chip('\\gamma', REF_GAMMA, p.gamma)}
+        {chip('\\varepsilon', REF_EPS, p.epsilon)}
+        {chip('\\alpha', REF_ALPHA, p.alpha)}
+        {chip('c', REF_C, p.c)}
+        {chip('t', REF_T, p.t)}
         {p.terminal.length > 0 && <span className="chip">terminal: {p.terminal.join(', ')}</span>}
       </div>
+      {p.episodes.length > 0 && (
+        <div className="timeline">
+          <h3>Episodes <span className="muted">(state, action, reward received)</span></h3>
+          {p.episodes.map((ep, e) => (
+            <div key={e} className="episode">
+              <span className="ep-label">Ep {e + 1}</span>
+              {ep.steps.map((x, t) => (
+                <span key={t} className={`ep-step ${focus === focusEp(e, t) ? 'on' : ''}`}>
+                  <span className="st"><Tex tex={idTex(x.s)} /></span>
+                  <span className="tr">
+                    {x.a && <Tex tex={idTex(x.a)} />} r=<Num r={refEpR(e, t)} v={x.r} /> →
+                  </span>
+                </span>
+              ))}
+              <span className="st end">{ep.end ? <Tex tex={idTex(ep.end)} /> : 'end'}</span>
+              {ep.endAction && <span className="tr"><Tex tex={idTex(ep.endAction)} /></span>}
+            </div>
+          ))}
+        </div>
+      )}
+      {p.pulls.length > 0 && (
+        <div className="timeline">
+          <h3>Pulls</h3>
+          <div className="pulls">
+            {p.pulls.map((x, i) => (
+              <span key={i} className={`pull ${focus === focusPull(i) ? 'on' : ''}`}>
+                <span className="muted">#{i + 1}</span> <Tex tex={idTex(x.a)} /> r=<Num r={refPull(i)} v={x.r} />
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+      {p.arms.length > 0 && (
+        <table>
+          <caption>Arms</caption>
+          <thead>
+            <tr>
+              <th>arm</th>
+              {p.arms.some((x) => x.q !== undefined) && <th><Tex tex="Q(a)" /></th>}
+              {p.arms.some((x) => x.n !== undefined) && <th><Tex tex="N(a)" /></th>}
+              {p.arms.some((x) => x.wins !== undefined) && <th>conversions</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {p.arms.map((x) => (
+              <tr key={x.a}>
+                <td><Tex tex={idTex(x.a)} /></td>
+                {p.arms.some((y) => y.q !== undefined) && <td>{x.q !== undefined && <Num r={refArm(x.a, 'q')} v={x.q} />}</td>}
+                {p.arms.some((y) => y.n !== undefined) && <td>{x.n !== undefined && <Num r={refArm(x.a, 'n')} v={x.n} />}</td>}
+                {p.arms.some((y) => y.wins !== undefined) && <td>{x.wins !== undefined && <Num r={refArm(x.a, 'wins')} v={x.wins} />}</td>}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
       {p.transitions.length > 0 && (
         <table>
           <caption>Transitions</caption>

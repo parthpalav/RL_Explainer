@@ -20,6 +20,7 @@ export interface Step {
   lines: Line[]; // first line may carry \htmlData{src=...} refs for the fly-in animation
   results: { cell: Cell; value: number | string }[];
   edges?: string[]; // transitions to highlight, see edgeKey()
+  focus?: string; // episode step or bandit pull to highlight, see focusEp() / focusPull()
 }
 
 export interface PartTrace {

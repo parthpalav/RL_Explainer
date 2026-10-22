@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { TASKS, type Problem } from '../schema';
 import { HEADINGS } from '../solvers';
 
-type Col<T> = { key: keyof T & string; label: string; kind: 'state' | 'action' | 'number' | 'text' | 'bool' };
+type Col<T> = { key: keyof T & string; label: string; kind: 'state' | 'action' | 'number' | 'optnum' | 'text' | 'bool' };
 
 interface RowsProps<T> {
   title: ReactNode;
@@ -37,12 +37,13 @@ function Rows<T extends Record<string, unknown>>({ title, rows, cols, blank, sta
                       <option value="" />
                       {(c.kind === 'state' ? states : actions).map((x) => <option key={x}>{x}</option>)}
                     </select>
-                  ) : c.kind === 'number' ? (
+                  ) : c.kind === 'number' || c.kind === 'optnum' ? (
                     <input
                       type="number"
                       step="any"
                       value={Number.isFinite(r[c.key]) ? String(r[c.key]) : ''}
-                      onChange={(e) => set(i, c.key, e.target.value === '' ? NaN : e.target.valueAsNumber)}
+                      // empty: NaN fails validation for required numbers, undefined means "not given"
+                      onChange={(e) => set(i, c.key, e.target.value === '' ? (c.kind === 'number' ? NaN : undefined) : e.target.valueAsNumber)}
                     />
                   ) : c.kind === 'bool' ? (
                     <input type="checkbox" checked={!!r[c.key]} onChange={(e) => set(i, c.key, e.target.checked)} />
@@ -101,10 +102,12 @@ export function ReviewForm({ draft: d, setDraft, issues, warnings }: Props) {
           <input type="number" step="any" value={Number.isFinite(d.gamma) ? d.gamma : ''}
             onChange={(e) => up({ gamma: e.target.value === '' ? NaN : e.target.valueAsNumber })} />
         </label>
-        <label>ε (epsilon, optional)
-          <input type="number" step="any" value={d.epsilon ?? ''}
-            onChange={(e) => up({ epsilon: e.target.value === '' ? undefined : e.target.valueAsNumber })} />
-        </label>
+        {(['epsilon', 'alpha', 'c', 't'] as const).map((k) => (
+          <label key={k}>{{ epsilon: 'ε', alpha: 'α (step size)', c: 'c (UCB)', t: 't (UCB time)' }[k]}
+            <input type="number" step="any" value={d[k] ?? ''} placeholder="—"
+              onChange={(e) => up({ [k]: e.target.value === '' ? undefined : e.target.valueAsNumber })} />
+          </label>
+        ))}
       </fieldset>
       <Rows title="States" rows={states} {...common} blank={{ id: '', name: '', terminal: false }}
         cols={[{ key: 'id', label: 'Id', kind: 'text' }, { key: 'name', label: 'Name', kind: 'text' }, { key: 'terminal', label: 'Terminal', kind: 'bool' }]}
@@ -125,6 +128,41 @@ export function ReviewForm({ draft: d, setDraft, issues, warnings }: Props) {
       <Rows title="Given Q-values" rows={d.Q} {...common} blank={{ s: '', a: '', v: NaN }}
         cols={[{ key: 's', label: 's', kind: 'state' }, { key: 'a', label: 'a', kind: 'action' }, { key: 'v', label: 'Q(s,a)', kind: 'number' }]}
         onChange={(Q) => up({ Q })} />
+      {d.episodes.map((ep, e) => {
+        const setEp = (patch: Partial<typeof ep>) => up({ episodes: d.episodes.map((x, j) => (j === e ? { ...x, ...patch } : x)) });
+        return (
+          <div key={e}>
+            <Rows title={<>Episode {e + 1}: steps (S<sub>t</sub>, A<sub>t</sub>, R<sub>t+1</sub>)</>} rows={ep.steps} {...common} blank={{ s: '', a: '', r: NaN }}
+              cols={[{ key: 's', label: 'S', kind: 'state' }, { key: 'a', label: 'A (optional)', kind: 'action' }, { key: 'r', label: 'R', kind: 'number' }]}
+              onChange={(steps) => setEp({ steps })} />
+            <div className="ep-end">
+              <label>then ends in
+                <select value={ep.end} onChange={(ev) => setEp({ end: ev.target.value })}>
+                  <option value="">terminal</option>
+                  {S.map((x) => <option key={x}>{x}</option>)}
+                </select>
+              </label>
+              <label>next action A′ (SARSA)
+                <select value={ep.endAction} onChange={(ev) => setEp({ endAction: ev.target.value })}>
+                  <option value="" />
+                  {A.map((x) => <option key={x}>{x}</option>)}
+                </select>
+              </label>
+              <button className="icon" onClick={() => up({ episodes: d.episodes.filter((_, j) => j !== e) })}>Remove episode</button>
+            </div>
+          </div>
+        );
+      })}
+      <button className="add" onClick={() => up({ episodes: [...d.episodes, { steps: [{ s: '', a: '', r: NaN }], end: '', endAction: '' }] })}>
+        + Add episode
+      </button>
+      <Rows title="Bandit pulls (arm, reward)" rows={d.pulls} {...common} blank={{ a: '', r: NaN }}
+        cols={[{ key: 'a', label: 'arm', kind: 'action' }, { key: 'r', label: 'reward', kind: 'number' }]}
+        onChange={(pulls) => up({ pulls })} />
+      <Rows title="Arm snapshot (optional fields)" rows={d.arms} {...common} blank={{ a: '' }}
+        cols={[{ key: 'a', label: 'arm', kind: 'action' }, { key: 'q', label: 'Q(a)', kind: 'optnum' }, { key: 'n', label: 'N(a) / visitors', kind: 'optnum' },
+          { key: 'wins', label: 'conversions', kind: 'optnum' }]}
+        onChange={(arms) => up({ arms })} />
 
       <fieldset>
         <legend>Question parts: what each part asks</legend>
@@ -143,12 +181,14 @@ export function ReviewForm({ draft: d, setDraft, issues, warnings }: Props) {
               <label>states <input value={pt.states.join(', ')} placeholder="all" onChange={(e) => setPart({ states: list(e.target.value) })} /></label>
               <label>rewards <input value={pt.rewards.join(', ')} placeholder="for G_t"
                 onChange={(e) => setPart({ rewards: list(e.target.value).map(Number) })} /></label>
+              <label>episodes <input value={pt.episodes.join(', ')} placeholder="all"
+                onChange={(e) => setPart({ episodes: list(e.target.value).map(Number) })} /></label>
               <input className="txt" value={pt.text} placeholder="Sub-question text" onChange={(e) => setPart({ text: e.target.value })} />
               <button className="icon" onClick={() => up({ parts: d.parts.filter((_, j) => j !== i) })} aria-label="Remove part">✕</button>
             </div>
           );
         })}
-        <button className="add" onClick={() => up({ parts: [...d.parts, { label: '', task: 'policy_evaluation', states: [], rewards: [], text: '' }] })}>
+        <button className="add" onClick={() => up({ parts: [...d.parts, { label: '', task: 'policy_evaluation', states: [], rewards: [], episodes: [], text: '' }] })}>
           + Add part
         </button>
       </fieldset>

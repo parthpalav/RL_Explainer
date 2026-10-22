@@ -15,6 +15,17 @@ export const TASKS = [
   'greedy_action',
   'epsilon_greedy_probs',
   'best_state',
+  'mc_prediction_first_visit',
+  'mc_prediction_every_visit',
+  'mc_control_epsilon_greedy',
+  'td0_prediction',
+  'sarsa',
+  'q_learning',
+  'bandit_sample_average',
+  'bandit_incremental',
+  'bandit_epsilon_greedy',
+  'bandit_ucb',
+  'ab_test',
   'theory',
 ] as const;
 export type Task = (typeof TASKS)[number];
@@ -30,6 +41,8 @@ export const PartSchema = z.object({
   states: z.array(Id).default([]),
   // Reward sequence R1, R2, ... for return_Gt.
   rewards: z.array(z.number()).default([]),
+  // 1-based episode numbers this part uses; empty means all episodes.
+  episodes: z.array(z.number().int().min(1)).default([]),
   // Free text of the sub-question, shown above its steps.
   text: z.string().default(''),
 });
@@ -40,7 +53,7 @@ const Named = z.object({ id: Id, name: z.string().default('') });
 // Structure only: what the LLM must return. Cross-field checks live in ProblemSchema.
 export const ProblemBase = z.object({
     title: z.string().default(''),
-    states: z.array(Named).min(1),
+    states: z.array(Named).default([]), // bandit questions have no states
     actions: z.array(Named).default([]),
     terminal: z.array(Id).default([]),
     gamma: z.number().min(0).max(1).default(0.9),
@@ -49,6 +62,24 @@ export const ProblemBase = z.object({
     V0: z.array(z.object({ s: Id, v: z.number() })).default([]),
     Q: z.array(z.object({ s: Id, a: Id, v: z.number() })).default([]),
     epsilon: z.number().min(0).max(1).optional(),
+    alpha: z.number().min(0).max(1).optional(),
+    // Sampled episodes: each step is (S_t, A_t, R_{t+1}). "end" is the state after the last step
+    // ('' = terminal); "endAction" is A' there, needed by SARSA when the episode is cut short.
+    episodes: z
+      .array(
+        z.object({
+          steps: z.array(z.object({ s: Id, a: z.string().trim().default(''), r: z.number() })).min(1),
+          end: z.string().trim().default(''),
+          endAction: z.string().trim().default(''),
+        }),
+      )
+      .default([]),
+    // Bandits: arms are the actions. "pulls" is a history of (arm, reward); "arms" a snapshot of
+    // per-arm estimate q, pull count n and successes wins (A/B tests).
+    pulls: z.array(z.object({ a: Id, r: z.number() })).default([]),
+    arms: z.array(z.object({ a: Id, q: z.number().optional(), n: z.number().min(0).optional(), wins: z.number().min(0).optional() })).default([]),
+    c: z.number().min(0).optional(), // UCB exploration constant
+    t: z.number().int().min(1).optional(), // UCB time step
     parts: z.array(PartSchema).min(1),
   });
 
@@ -75,6 +106,19 @@ export const ProblemSchema = ProblemBase.superRefine((p, ctx) => {
       ac(x.a, ['Q', i, 'a']);
     });
     p.parts.forEach((pt, i) => pt.states.forEach((s, j) => st(s, ['parts', i, 'states', j])));
+    p.parts.forEach((pt, i) =>
+      pt.episodes.forEach((e, j) => e <= p.episodes.length || bad(['parts', i, 'episodes', j], `Episode ${e} does not exist`)),
+    );
+    p.episodes.forEach((ep, e) => {
+      ep.steps.forEach((x, t) => {
+        st(x.s, ['episodes', e, 'steps', t, 's']);
+        if (x.a) ac(x.a, ['episodes', e, 'steps', t, 'a']);
+      });
+      if (ep.end) st(ep.end, ['episodes', e, 'end']);
+      if (ep.endAction) ac(ep.endAction, ['episodes', e, 'endAction']);
+    });
+    p.pulls.forEach((x, i) => ac(x.a, ['pulls', i, 'a']));
+    p.arms.forEach((x, i) => ac(x.a, ['arms', i, 'a']));
 
     const sums = new Map<string, number>();
     for (const t of p.transitions) sums.set(`${t.s}, ${t.a}`, (sums.get(`${t.s}, ${t.a}`) ?? 0) + t.p);
@@ -88,3 +132,6 @@ export const ProblemSchema = ProblemBase.superRefine((p, ctx) => {
   });
 
 export type Problem = z.infer<typeof ProblemSchema>;
+
+/** Fill defaults so hand-written problems (fixtures, tests) can omit empty fields. */
+export const problem = (x: z.input<typeof ProblemBase>): Problem => ProblemBase.parse(x);

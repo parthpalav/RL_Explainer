@@ -3,7 +3,8 @@
 import { z } from 'zod';
 import { ProblemBase, type Problem } from '../schema';
 import { HEADINGS } from '../solvers';
-import { FEWSHOT, FEWSHOT_TEXT } from '../fixtures/fewshot';
+import { FEWSHOT, FEWSHOT_BANDIT, FEWSHOT_BANDIT_TEXT, FEWSHOT_MF, FEWSHOT_MF_TEXT, FEWSHOT_TEXT } from '../fixtures/fewshot';
+import { detectTasks } from './keywords';
 
 export const DEFAULT_MODEL = 'qwen2.5:7b';
 
@@ -21,6 +22,17 @@ const TASK_HINTS: Record<string, string> = {
   greedy_action: 'pick the greedy action from given Q-values',
   epsilon_greedy_probs: 'action probabilities under an epsilon-greedy policy (needs Q and epsilon)',
   best_state: 'which state has the highest value',
+  mc_prediction_first_visit: 'Monte Carlo prediction of V from episodes, first-visit (the default for "Monte Carlo")',
+  mc_prediction_every_visit: 'Monte Carlo prediction of V from episodes, every-visit',
+  mc_control_epsilon_greedy: 'Monte Carlo control: Q from episode returns, then epsilon-greedy policy improvement',
+  td0_prediction: 'TD(0) updates of V from episode steps',
+  sarsa: 'SARSA updates of Q (uses the next action actually taken)',
+  q_learning: 'Q-learning updates of Q (uses max over next actions)',
+  bandit_sample_average: 'bandit arm estimates as the average of each arm\'s rewards',
+  bandit_incremental: 'bandit incremental update Q <- Q + (1/n)(R - Q) after each pull',
+  bandit_epsilon_greedy: 'probability of choosing each bandit arm under epsilon-greedy',
+  bandit_ucb: 'UCB arm selection (needs c, and t if given)',
+  ab_test: 'A/B test: conversion rates and z-test (variants are actions; arms.n = visitors, arms.wins = conversions)',
   theory: 'explain / compare / define: no calculation',
 };
 
@@ -32,7 +44,10 @@ Rules:
 - transitions: one row per (s, a, s2) with probability p and reward r. If a reward is given per (s, a), copy it into every row of that (s, a). Probabilities of each (s, a) must add up to 1.
 - policy: rows (s, a, p). A deterministic policy has p = 1. Leave empty if no policy is given.
 - V0: initial values if given (V0 = 0 for all states means rows with v = 0). Q: given Q-values only.
-- epsilon: if ε appears anywhere in the question, including inside a sub-question.
+- epsilon, alpha (α, step size / learning rate), c (UCB constant), t (UCB time step): copy if they appear anywhere, including inside a sub-question.
+- episodes: each step is (s, a, r) = state, action taken, reward received after it. "end" is the state reached after the last step. "endAction" is the action taken there, only if given. Leave "a" empty if the question gives no actions.
+- pulls: bandit history, one (a, r) row per pull, in order. arms: per-arm snapshot (q estimate, n pull count / visitors, wins conversions), only if given. Bandit arms are listed as actions; bandit questions have no states.
+- parts.episodes: 1-based episode numbers a part uses ("episode 2" -> [2]); [] means all.
 - parts: one per sub-question (a, b, c, ...), in order. "label" is the letter, "text" the sub-question.
   "iterations" is the final iteration index the part asks for: "compute V2" -> 2, "2 iterations" -> 2.
   "states" restricts a part to specific states (e.g. "in S1" -> ["S1"]); otherwise [].
@@ -41,6 +56,22 @@ Rules:
 ${Object.entries(TASK_HINTS).map(([k, v]) => `  ${k}: ${HEADINGS[k as keyof typeof HEADINGS]}: ${v}`).join('\n')}`;
 
 const SCHEMA = z.toJSONSchema(ProblemBase, { io: 'output' });
+
+const MF = /^(mc_|td0|sarsa|q_learning)/;
+const BANDIT = /^(bandit_|ab_test)/;
+
+/** Show the model the worked example(s) closest to this question, to keep the prompt short. */
+function examplesFor(text: string) {
+  const found = detectTasks(text);
+  const picks = [
+    found.some((t) => MF.test(t)) && ([FEWSHOT_MF_TEXT, FEWSHOT_MF] as const),
+    found.some((t) => BANDIT.test(t)) && ([FEWSHOT_BANDIT_TEXT, FEWSHOT_BANDIT] as const),
+  ].filter((x) => x !== false);
+  return (picks.length ? picks : [[FEWSHOT_TEXT, FEWSHOT] as const]).flatMap(([q, a]) => [
+    { role: 'user', content: q },
+    { role: 'assistant', content: JSON.stringify(a) },
+  ]);
+}
 
 export async function listModels(base = '/ollama'): Promise<string[]> {
   const r = await fetch(`${base}/api/tags`);
@@ -59,12 +90,7 @@ export async function extract(text: string, model: string, opts: { base?: string
       stream: false,
       format: SCHEMA,
       options: { temperature: 0, num_ctx: 8192 },
-      messages: [
-        { role: 'system', content: SYSTEM },
-        { role: 'user', content: FEWSHOT_TEXT },
-        { role: 'assistant', content: JSON.stringify(FEWSHOT) },
-        { role: 'user', content: text },
-      ],
+      messages: [{ role: 'system', content: SYSTEM }, ...examplesFor(text), { role: 'user', content: text }],
     }),
   });
   if (!r.ok) throw new Error(`Ollama answered ${r.status}: ${(await r.text()).slice(0, 200)}`);
@@ -88,12 +114,34 @@ const numAfter = (text: string, re: RegExp) => {
 
 /** Deterministic fixes for things small models often miss; the question text wins over the model. */
 export function clean(p: Problem, text: string): Problem {
-  const gamma = numAfter(text, /(?:γ|gamma|discount\s+factor)\s*(?:\(γ\)\s*)?[=:]\s*(\d*\.?\d+)/i);
-  const epsilon = numAfter(text, /(?:ε|epsilon)\s*=\s*(\d*\.?\d+)/i);
+  // "γ = 0.9", "discount factor (γ): 0.9", "discount 0.8", "learning rate of 0.5"
+  const V = String.raw`\s*(?:\([^)]*\)\s*)?(?:[=:]|of|is)?\s*(\d*\.?\d+)`;
+  const gamma = numAfter(text, new RegExp(String.raw`(?:γ|gamma|discount(?:\s+factor)?)` + V, 'i'));
+  const epsilon = numAfter(text, new RegExp(String.raw`(?:ε|epsilon)` + V, 'i'));
+  const alpha = numAfter(text, new RegExp(String.raw`(?:α|alpha|step[-\s]size|learning\s+rate)` + V, 'i'));
+  const ucb = /\bUCB\b|upper\s+confidence/i.test(text);
+  const c = ucb ? numAfter(text, /\bc\s*=\s*(\d*\.?\d+)/) : undefined;
+  const t = ucb ? numAfter(text, /\bt\s*=\s*(\d+)/) : undefined;
   return {
     ...p,
     gamma: gamma ?? p.gamma,
     epsilon: epsilon ?? p.epsilon,
+    alpha: alpha ?? p.alpha,
+    c: c ?? p.c,
+    t: t ?? p.t,
     policy: p.policy.filter((x) => x.p > 0),
+    parts: p.parts.map((pt) => ({ ...pt, iterations: pt.iterations ?? iterationsIn(pt.text) })),
   };
+}
+
+/** "compute V2(S1)" -> 2, "2 iterations" / "two sweeps" -> 2. */
+function iterationsIn(text: string): number | undefined {
+  const words: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5 };
+  const ns = [
+    ...[...text.matchAll(/\bV_?\{?(\d+)\}?\s*\(/g)].map((m) => +m[1]),
+    ...[...text.matchAll(/\b(\d+|one|two|three|four|five)\s+(?:iterations?|sweeps?|steps? of (?:iterative )?(?:policy evaluation|value iteration))/gi)].map(
+      (m) => words[m[1].toLowerCase()] ?? +m[1],
+    ),
+  ].filter((n) => n >= 1);
+  return ns.length ? Math.max(...ns) : undefined;
 }

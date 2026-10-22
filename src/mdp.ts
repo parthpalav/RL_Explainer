@@ -18,6 +18,15 @@ export const refQ = (s: string, a: string) => `Q|${s}|${a}`;
 export const refPi = (s: string, a: string) => `pi|${s}|${a}`;
 export const REF_GAMMA = 'gamma';
 export const REF_EPS = 'epsilon';
+export const REF_ALPHA = 'alpha';
+export const REF_C = 'c';
+export const REF_T = 't';
+export const refEpR = (e: number, t: number) => `ep|${e}|${t}|r`;
+export const refPull = (i: number) => `pull|${i}`;
+export const refArm = (a: string, f: 'q' | 'n' | 'wins') => `arm|${a}|${f}`;
+// Timeline items a step can point at.
+export const focusEp = (e: number, t: number) => `ep|${e}|${t}`;
+export const focusPull = (i: number) => `pull|${i}`;
 export const cellRef = (c: Cell) => `cell|${c.table}|${c.row}|${c.col}`;
 export const domRef = (r: string) => safeRef(r);
 
