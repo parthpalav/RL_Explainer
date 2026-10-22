@@ -1,7 +1,9 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import gsap from 'gsap';
 import type { PartTrace, Step } from '../solvers/types';
 import { Rich, Tex } from './Tex';
+import { Predict, TheoryCards, quizzable } from './Predict';
+import { F } from '../solvers/dp';
 
 export type Flat = { pi: number; step: Step };
 
@@ -30,8 +32,15 @@ export function StepPlayer({ traces, flat, index, setIndex, onRevealed }: Props)
   const [playing, setPlaying] = useState(false);
   const [done, setDone] = useState(false);
   const [speed, setSpeed] = useState(1);
+  const [predict, setPredict] = useState(false);
+  const [answered, setAnswered] = useState<Set<number>>(new Set());
+  const [score, setScore] = useState({ right: 0, total: 0, streak: 0 });
   const cur = flat[index];
   const part = cur ? traces[cur.pi] : undefined;
+  const waiting = predict && !!cur && quizzable(cur.step) && !answered.has(index);
+  const pool = useMemo(() => [...new Set([...flat.map((f) => f.step.formula), ...Object.values(F)].filter((f): f is string => !!f))], [flat]);
+
+  useEffect(() => setAnswered(new Set()), [flat]);
 
   const go = (i: number, skipAnim = false) => {
     if (i < 0 || i >= flat.length) return;
@@ -44,6 +53,7 @@ export function StepPlayer({ traces, flat, index, setIndex, onRevealed }: Props)
     if (!root || !cur) return;
     setDone(false);
     onRevealed(false);
+    if (waiting) return; // quiz first: keep the answer out of the results table
     const chips: HTMLElement[] = [];
     const t = gsap.timeline({
       onComplete: () => {
@@ -101,14 +111,14 @@ export function StepPlayer({ traces, flat, index, setIndex, onRevealed }: Props)
     };
     // speed is applied separately below so changing it does not restart the step
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [index, flat]);
+  }, [index, flat, waiting]);
 
   useEffect(() => {
     tl.current?.timeScale(speed);
   }, [speed]);
 
   useEffect(() => {
-    if (!playing || !done) return;
+    if (!playing || !done || waiting) return;
     if (index >= flat.length - 1) {
       setPlaying(false);
       return;
@@ -151,13 +161,24 @@ export function StepPlayer({ traces, flat, index, setIndex, onRevealed }: Props)
       </nav>
       {part.part.text && <p className="part-text">{part.part.text}</p>}
 
-      <div className="card" ref={card} key={index}>
+      <div className="card" ref={card} key={`${index}-${waiting}`}>
         <header>
           <span className="count">
             Step {posInPart + 1} / {partSteps.length}
           </span>
           <h3><Rich text={step.title} /></h3>
         </header>
+        {waiting ? (
+          <Predict
+            step={step}
+            pool={pool}
+            onDone={(ok) => {
+              setScore((x) => ({ right: x.right + +ok, total: x.total + 1, streak: ok ? x.streak + 1 : 0 }));
+              setAnswered((x) => new Set(x).add(index));
+            }}
+          />
+        ) : (
+          <>
         <p className="why">{step.why}</p>
         {step.formula && (
           <div className="formula">
@@ -176,6 +197,9 @@ export function StepPlayer({ traces, flat, index, setIndex, onRevealed }: Props)
             ))}
           </div>
         ) : null}
+        {step.cards && <TheoryCards ids={step.cards} />}
+          </>
+        )}
       </div>
 
       <div className="controls">
@@ -185,6 +209,14 @@ export function StepPlayer({ traces, flat, index, setIndex, onRevealed }: Props)
         </button>
         <button onClick={() => go(index + 1)} disabled={index === flat.length - 1} title="Next step (→)">Next ▶</button>
         <button onClick={() => tl.current?.restart()} title="Replay this step">↻ Replay</button>
+        <label className="toggle" title="Guess the formula and the value before each calculation is shown">
+          <input type="checkbox" checked={predict} onChange={(e) => setPredict(e.target.checked)} /> Predict mode
+        </label>
+        {predict && score.total > 0 && (
+          <span className="score" aria-live="polite">
+            {score.right}/{score.total} correct{score.streak > 1 ? ` · streak ${score.streak} 🔥` : ''}
+          </span>
+        )}
         <label>
           Speed{' '}
           <select value={speed} onChange={(e) => setSpeed(+e.target.value)}>

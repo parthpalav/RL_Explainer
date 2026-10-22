@@ -21,6 +21,7 @@ export interface Step {
   results: { cell: Cell; value: number | string }[];
   edges?: string[]; // transitions to highlight, see edgeKey()
   focus?: string; // episode step or bandit pull to highlight, see focusEp() / focusPull()
+  cards?: string[]; // theory card ids, see src/content/theory.ts
 }
 
 export interface PartTrace {

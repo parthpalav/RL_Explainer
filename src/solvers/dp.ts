@@ -7,6 +7,7 @@ import {
 } from '../mdp';
 import { add, chain, div, evaluate, fmt, mul, num, pow, max, safeRef, sub, toLatex, type Expr } from '../math/expr';
 import { solveLinear } from './linear';
+import { cardsFor } from '../content/theory';
 
 export const F = {
   peDet: String.raw`V_{k+1}(s) = \sum_{s'} P(s'\mid s,\pi(s))\,\big[R(s,\pi(s),s') + \gamma\,V_k(s')\big]`,
@@ -370,12 +371,18 @@ const returnGt: Solver = (p, part) => {
   }];
 };
 
-const theory: Solver = (_p, part) => [{
-  title: 'Theory question',
-  why: `This part asks for an explanation, not a calculation.${part.text ? ` "${part.text}"` : ''}`,
-  lines: [],
-  results: [],
-}];
+const theory: Solver = (_p, part) => {
+  const cards = cardsFor(part.text).map((c) => c.id);
+  return [{
+    title: 'Theory question',
+    why: cards.length
+      ? 'This part asks for an explanation, not a calculation. Here are the key points to cover.'
+      : `This part asks for an explanation, not a calculation. No revision card matches "${part.text}" yet.`,
+    lines: [],
+    results: [],
+    cards,
+  }];
+};
 
 export const DP = {
   return_Gt: returnGt,

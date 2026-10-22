@@ -86,13 +86,17 @@ button.add { margin-top: 6px; font-size: 13px; }
 /* solve mode */
 .solve-layout { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(0, 2.2fr) minmax(260px, 1fr); gap: 16px; padding: 16px; align-items: start; }
 @media (max-width: 1200px) { .solve-layout { grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); } .results { grid-column: 1 / -1; } }
-@media (max-width: 800px) { .solve-layout, .edit-layout { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 800px) {
+  .solve-layout, .edit-layout { grid-template-columns: minmax(0, 1fr); padding: 12px; }
+  .solve-layout .player { order: -1; } /* steps first on phones; data and results below */
+  .data, .results { position: static; max-height: none; }
+}
 .data, .results { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow: auto; }
 
 .graph { width: 100%; height: auto; display: block; }
-.graph .edge { fill: none; stroke: var(--line); stroke-width: 1.6; }
+.graph .edge { fill: none; stroke: var(--muted); stroke-opacity: 0.45; stroke-width: 1.6; }
 .graph .edge.on { stroke: var(--accent); stroke-width: 2.6; }
-.graph .arrowhead { fill: var(--line); }
+.graph .arrowhead { fill: var(--muted); fill-opacity: 0.6; }
 .graph .arrowhead.on { fill: var(--accent); }
 .graph .node circle { fill: var(--panel); stroke: var(--ink); stroke-width: 1.6; }
 .graph .nid { font-weight: 700; font-size: 14px; fill: var(--ink); }
@@ -172,3 +176,27 @@ code { font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace; }
 .pulls { display: flex; flex-wrap: wrap; gap: 6px; }
 .pull { border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; font-size: 13.5px; }
 .ep-end { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: -6px 0 12px; padding: 0 10px; }
+
+/* predict mode */
+.toggle { display: inline-flex; align-items: center; gap: 6px; }
+.score { font-weight: 600; color: var(--ok); }
+.predict fieldset { border: 1px solid var(--line); border-radius: 8px; margin: 0 0 12px; padding: 8px 12px; }
+.predict legend { font-weight: 600; padding: 0 4px; }
+.predict .opt { display: flex; align-items: center; gap: 10px; padding: 2px 8px; border-radius: 8px; cursor: pointer; overflow-x: auto; }
+.predict .opt:hover { background: var(--bg); }
+.predict .opt.right { background: color-mix(in srgb, var(--ok) 15%, transparent); outline: 2px solid var(--ok); }
+.predict .opt.wrong { background: var(--bad-soft); outline: 2px solid var(--bad); }
+.predict .ans { display: flex; align-items: center; gap: 10px; font-size: 1.15em; }
+.predict .ans input { width: 140px; font-size: 1em; }
+.verdict p { margin: 4px 0; font-weight: 600; }
+.verdict .ok { color: var(--ok); }
+.verdict .bad { color: var(--bad); }
+
+/* theory cards */
+.theory { border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 8px; padding: 10px 14px; margin-top: 12px; }
+.theory h4 { margin: 0 0 6px; font-size: 16px; }
+.theory p { margin: 0 0 8px; }
+.theory table { border-collapse: collapse; width: 100%; font-size: 14px; }
+.theory th, .theory td { border: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
+.theory thead th { background: var(--bg); }
+.theory ul { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
