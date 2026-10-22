@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Part, Problem } from '../schema';
 import { DEFAULT_MODEL, extract, listModels } from '../extract/ollama';
 import { splitParts } from '../extract/keywords';
+import { Icon } from './Icon';
 
 const KEY = 'rl-explainer-model';
 const load = () => {
@@ -74,25 +75,29 @@ export function ExtractBar({ question, onProblem, onParts }: Props) {
   return (
     <div className="extract">
       <div className="extract-row">
-        <label>
-          Model{' '}
-          {models?.length ? (
-            <select value={model} onChange={(e) => pick(e.target.value)}>
-              {missing && <option value={model}>{model} (not installed)</option>}
-              {models.map((m) => <option key={m}>{m}</option>)}
-            </select>
-          ) : (
-            <input value={model} onChange={(e) => pick(e.target.value)} />
-          )}
-        </label>
-        {busy ? (
-          <button onClick={() => abort.current?.abort()}>■ Stop ({secs}s)</button>
+        <span className={`conn ${offline ? 'off' : models ? 'on' : ''}`} title={offline ? 'Ollama is not reachable' : 'Ollama is running'}>
+          <i /> {offline ? 'Ollama offline' : models ? 'Ollama' : 'Connecting…'}
+        </span>
+        {models?.length ? (
+          <select className="model" value={model} onChange={(e) => pick(e.target.value)} aria-label="Model">
+            {missing && <option value={model}>{model} (not installed)</option>}
+            {models.map((m) => <option key={m}>{m}</option>)}
+          </select>
         ) : (
-          <button className="primary" onClick={run} disabled={!question.trim() || offline || !!missing}>
-            Extract with local LLM
+          <input className="model" value={model} onChange={(e) => pick(e.target.value)} aria-label="Model" />
+        )}
+      </div>
+      <div className="extract-row">
+        {busy ? (
+          <button className="primary grow busy" onClick={() => abort.current?.abort()}>
+            <span className="spinner" aria-hidden="true" /> Reading question… {secs}s · Stop
+          </button>
+        ) : (
+          <button className="primary grow" onClick={run} disabled={!question.trim() || offline || !!missing}>
+            <Icon name="spark" size={16} /> Extract data with local LLM
           </button>
         )}
-        <button onClick={() => onParts(splitParts(question))} disabled={busy} title="Split sub-questions and guess tasks from keywords, without the LLM">
+        <button className="ghost" onClick={() => onParts(splitParts(question))} disabled={busy} title="Split sub-questions and guess tasks from keywords, without the LLM">
           Detect parts only
         </button>
       </div>
@@ -102,7 +107,7 @@ export function ExtractBar({ question, onProblem, onParts }: Props) {
         </p>
       )}
       {missing && <p className="warn">Model not installed. Run <code>ollama pull {model}</code>.</p>}
-      {busy && <p className="muted">Reading the question… a 7B model takes about 30–90 s on an M4.</p>}
+      {busy && <p className="muted small">A 7B model takes about 30–90 s on an M4.</p>}
       {error && <p className="err" role="alert">{error}</p>}
     </div>
   );

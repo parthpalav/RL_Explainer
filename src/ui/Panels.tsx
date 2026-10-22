@@ -43,8 +43,8 @@ export function DataPanel({ p, active, focus }: { p: Problem; active: string[]; 
     );
   return (
     <aside className="panel data">
-      <h2>Given</h2>
-      {p.transitions.length > 0 && <MdpGraph p={p} active={active} />}
+      <h2 className="side-h"><i className="sw given" /> Given in the question</h2>
+      {p.transitions.length > 0 && <div className="graph-wrap"><MdpGraph p={p} active={active} /></div>}
       <div className="chips">
         {(p.transitions.length > 0 || p.episodes.length > 0) && chip('\\gamma', REF_GAMMA, p.gamma)}
         {chip('\\varepsilon', REF_EPS, p.epsilon)}
@@ -192,8 +192,8 @@ export function ResultsPanel({ shown }: { shown: Shown[] }) {
   }
   return (
     <aside className="panel results">
-      <h2>Worked values</h2>
-      {!tables.size && <p className="muted">Values appear here as each step is solved.</p>}
+      <h2 className="side-h"><i className="sw fresh" /> Worked values</h2>
+      {!tables.size && <p className="empty">Each value lands here as soon as its step is solved, so you can build the answer table as you go.</p>}
       {[...tables].map(([name, t]) => (
         <table key={name}>
           <caption><Tex tex={name} /></caption>

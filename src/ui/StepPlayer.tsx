@@ -4,6 +4,7 @@ import type { PartTrace, Step } from '../solvers/types';
 import { Rich, Tex } from './Tex';
 import { Predict, TheoryCards, quizzable } from './Predict';
 import { F } from '../solvers/dp';
+import { Icon } from './Icon';
 
 export type Flat = { pi: number; step: Step };
 
@@ -146,89 +147,121 @@ export function StepPlayer({ traces, flat, index, setIndex, onRevealed }: Props)
   const partSteps = flat.map((f, i) => ({ ...f, i })).filter((f) => f.pi === cur.pi);
   const { step } = cur;
   const posInPart = partSteps.findIndex((f) => f.i === index);
+  const pct = ((posInPart + 1) / partSteps.length) * 100;
 
   return (
     <section className="player">
-      <nav className="parts">
+      <nav className="parts" aria-label="Question parts">
         {traces.map((t, pi) => {
           const first = flat.findIndex((f) => f.pi === pi);
+          const state = pi === cur.pi ? 'on' : pi < cur.pi ? 'done' : '';
           return (
-            <button key={pi} className={pi === cur.pi ? 'on' : ''} onClick={() => go(first, true)} disabled={first < 0}>
-              <b>{t.part.label ? `${t.part.label})` : `Part ${pi + 1}`}</b> {t.heading}
+            <button key={pi} className={`part-tab ${state}`} onClick={() => go(first, true)} disabled={first < 0}
+              aria-current={pi === cur.pi ? 'true' : undefined}>
+              <span className="badge">{t.part.label || pi + 1}</span>
+              <span className="h">{t.heading}</span>
             </button>
           );
         })}
       </nav>
-      {part.part.text && <p className="part-text">{part.part.text}</p>}
 
-      <div className="card" ref={card} key={`${index}-${waiting}`}>
-        <header>
-          <span className="count">
-            Step {posInPart + 1} / {partSteps.length}
-          </span>
-          <h3><Rich text={step.title} /></h3>
-        </header>
-        {waiting ? (
-          <Predict
-            step={step}
-            pool={pool}
-            onDone={(ok) => {
-              setScore((x) => ({ right: x.right + +ok, total: x.total + 1, streak: ok ? x.streak + 1 : 0 }));
-              setAnswered((x) => new Set(x).add(index));
-            }}
-          />
-        ) : (
-          <>
-        <p className="why">{step.why}</p>
-        {step.formula && (
-          <div className="formula">
-            <span className="tag">Formula</span>
-            <Tex tex={step.formula} display />
-          </div>
+      <div className="stage">
+        {part.part.text && (
+          <p className="part-text">
+            <span className="eyebrow">Question {part.part.label ? `(${part.part.label})` : ''}</span>
+            {part.part.text}
+          </p>
         )}
-        {step.lines.length > 0 ? (
-          <div className="lines">
-            {step.lines.map((l, i) => (
-              <div className="line" key={i}>
-                <span className="lhs">{l.lhs && <Tex tex={l.lhs} />}</span>
-                <span className="eq"><Tex tex="=" /></span>
-                <span className="rhs"><Tex tex={l.rhs} /></span>
-              </div>
-            ))}
-          </div>
-        ) : null}
-        {step.cards && <TheoryCards ids={step.cards} />}
-          </>
-        )}
+        <div className="progress" role="progressbar" aria-valuemin={1} aria-valuemax={partSteps.length} aria-valuenow={posInPart + 1}>
+          <div className="bar" style={{ width: `${pct}%` }} />
+        </div>
+
+        <div className="card" ref={card} key={`${index}-${waiting}`}>
+          <header>
+            <span className="eyebrow">Step {posInPart + 1} of {partSteps.length}</span>
+            <h3><Rich text={step.title} /></h3>
+          </header>
+          {waiting ? (
+            <Predict
+              step={step}
+              pool={pool}
+              onDone={(ok) => {
+                setScore((x) => ({ right: x.right + +ok, total: x.total + 1, streak: ok ? x.streak + 1 : 0 }));
+                setAnswered((x) => new Set(x).add(index));
+              }}
+            />
+          ) : (
+            <>
+              <p className="why"><Icon name="info" size={16} /><span>{step.why}</span></p>
+              {step.formula && (
+                <div className="formula">
+                  <span className="tag">Formula</span>
+                  <Tex tex={step.formula} display />
+                </div>
+              )}
+              {step.lines.length > 0 ? (
+                <div className="lines">
+                  {step.lines.map((l, i) => (
+                    <div className="line" key={i}>
+                      <span className="lhs">{l.lhs && <Tex tex={l.lhs} />}</span>
+                      <span className="eq"><Tex tex="=" /></span>
+                      <span className="rhs"><Tex tex={l.rhs} /></span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              {step.cards && <TheoryCards ids={step.cards} />}
+              {step.lines.length > 0 && (
+                <footer className="key">
+                  <span><i className="sw given" /> value plugged in from the question or an earlier step</span>
+                  <span><i className="sw fresh" /> just calculated</span>
+                </footer>
+              )}
+            </>
+          )}
+        </div>
       </div>
 
-      <div className="controls">
-        <button onClick={() => go(index - 1, true)} disabled={index === 0} title="Previous step (←)">◀ Prev</button>
-        <button onClick={() => setPlaying((x) => !x)} className="primary" title="Play / pause (space)">
-          {playing ? '❚❚ Pause' : '▶ Play'}
-        </button>
-        <button onClick={() => go(index + 1)} disabled={index === flat.length - 1} title="Next step (→)">Next ▶</button>
-        <button onClick={() => tl.current?.restart()} title="Replay this step">↻ Replay</button>
-        <label className="toggle" title="Guess the formula and the value before each calculation is shown">
-          <input type="checkbox" checked={predict} onChange={(e) => setPredict(e.target.checked)} /> Predict mode
+      <div className="transport">
+        <div className="tgroup">
+          <button className="round" onClick={() => go(index - 1, true)} disabled={index === 0} title="Previous step (←)" aria-label="Previous step">
+            <Icon name="prev" />
+          </button>
+          <button className="round play" onClick={() => setPlaying((x) => !x)} title="Play / pause (space)" aria-label={playing ? 'Pause' : 'Play'}>
+            <Icon name={playing ? 'pause' : 'play'} size={20} />
+          </button>
+          <button className="round" onClick={() => go(index + 1)} disabled={index === flat.length - 1} title="Next step (→)" aria-label="Next step">
+            <Icon name="next" />
+          </button>
+          <button className="round subtle" onClick={() => tl.current?.restart()} title="Replay this step" aria-label="Replay this step">
+            <Icon name="replay" size={17} />
+          </button>
+        </div>
+        <div className="seg" role="radiogroup" aria-label="Speed">
+          {SPEEDS.map((s) => (
+            <button key={s} role="radio" aria-checked={speed === s} className={speed === s ? 'on' : ''} onClick={() => setSpeed(s)}>{s}×</button>
+          ))}
+        </div>
+        <label className="switch" title="Guess the formula and the value before each calculation is shown">
+          <input type="checkbox" checked={predict} onChange={(e) => setPredict(e.target.checked)} />
+          <span className="track"><span className="thumb" /></span>
+          Predict mode
         </label>
         {predict && score.total > 0 && (
           <span className="score" aria-live="polite">
-            {score.right}/{score.total} correct{score.streak > 1 ? ` · streak ${score.streak} 🔥` : ''}
+            <Icon name="target" size={15} /> {score.right}/{score.total}{score.streak > 1 ? ` · streak ${score.streak}` : ''}
           </span>
         )}
-        <label>
-          Speed{' '}
-          <select value={speed} onChange={(e) => setSpeed(+e.target.value)}>
-            {SPEEDS.map((s) => <option key={s} value={s}>{s}×</option>)}
-          </select>
-        </label>
+        <span className="keys" aria-hidden="true"><kbd>←</kbd><kbd>→</kbd><kbd>space</kbd></span>
       </div>
 
-      <ol className="steps">
-        {partSteps.map((f) => (
+      <ol className="steps" aria-label="Steps in this part">
+        {partSteps.map((f, k) => (
           <li key={f.i} className={f.i === index ? 'on' : f.i < index ? 'past' : ''}>
-            <button onClick={() => go(f.i, true)}><Rich text={f.step.title} /></button>
+            <button onClick={() => go(f.i, true)}>
+              <span className="n">{f.i < index ? <Icon name="check" size={12} /> : k + 1}</span>
+              <span className="t"><Rich text={f.step.title} /></span>
+            </button>
           </li>
         ))}
       </ol>
