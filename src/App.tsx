@@ -3,6 +3,8 @@ import { ProblemSchema, type Problem } from './schema';
 import { solveAll } from './solvers';
 import { EXAMPLES } from './fixtures/ia1';
 import { ReviewForm } from './ui/ReviewForm';
+import { ExtractBar } from './ui/ExtractBar';
+import { crossCheck } from './extract/keywords';
 import { StepPlayer, flatten } from './ui/StepPlayer';
 import { DataPanel, ResultsPanel, type Shown } from './ui/Panels';
 
@@ -17,6 +19,7 @@ export default function App() {
   const issues = parsed.success
     ? []
     : parsed.error.issues.map((i) => (i.path.length ? `${i.path.join(' › ')}: ${i.message}` : i.message));
+  const warnings = crossCheck(draft.parts);
   const traces = useMemo(() => (solved ? solveAll(solved) : []), [solved]);
   const flat = useMemo(() => flatten(traces), [traces]);
 
@@ -56,11 +59,12 @@ export default function App() {
           <section className="panel">
             <h2>Question</h2>
             <textarea value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="Paste the question here" />
-            <p className="muted">Automatic extraction with a local LLM comes in the next phase. For now, check or enter the data on the right.</p>
+            <ExtractBar question={question} onProblem={setDraft} onParts={(parts) => setDraft({ ...draft, parts })} />
+            <p className="muted">The model only copies the data. Check it on the right before solving: all maths is done by the app, not the model.</p>
           </section>
           <section className="panel">
             <h2>Extracted data</h2>
-            <ReviewForm draft={draft} setDraft={setDraft} issues={issues} />
+            <ReviewForm draft={draft} setDraft={setDraft} issues={issues} warnings={warnings} />
           </section>
         </main>
       ) : (

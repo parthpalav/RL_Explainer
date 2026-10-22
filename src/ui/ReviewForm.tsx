@@ -69,10 +69,11 @@ interface Props {
   draft: Problem;
   setDraft: (p: Problem) => void;
   issues: string[];
+  warnings: string[];
 }
 
 /** Every extracted value is editable here; nothing is solved until the data validates. */
-export function ReviewForm({ draft: d, setDraft, issues }: Props) {
+export function ReviewForm({ draft: d, setDraft, issues, warnings }: Props) {
   const S = d.states.map((s) => s.id);
   const A = d.actions.map((a) => a.id);
   const up = (patch: Partial<Problem>) => setDraft({ ...d, ...patch });
@@ -85,6 +86,12 @@ export function ReviewForm({ draft: d, setDraft, issues }: Props) {
         <div className="issues" role="alert">
           <b>Fix these before solving:</b>
           <ul>{issues.map((x) => <li key={x}>{x}</li>)}</ul>
+        </div>
+      )}
+      {warnings.length > 0 && (
+        <div className="warnings">
+          <b>Double-check:</b>
+          <ul>{warnings.map((x) => <li key={x}>{x}</li>)}</ul>
         </div>
       )}
       <fieldset>

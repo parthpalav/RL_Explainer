@@ -12,10 +12,22 @@ npm run dev     # http://localhost:5173
 npm test        # solver tests against the IA1 answers
 ```
 
+### Question extraction (optional)
+
+Needs [Ollama](https://ollama.com) running locally:
+
+```sh
+ollama serve
+ollama pull qwen2.5:7b                 # default model, ~4.7 GB
+OLLAMA=1 npx vitest run src/extract    # check extraction of the IA1 questions
+```
+
+Without Ollama, "Detect parts only" splits the sub-questions and guesses each algorithm from keywords. You then type the numbers into the form.
+
 ## Status
 
 - Phase 1 (done): dynamic programming solvers (policy evaluation, in-place evaluation, exact linear-system evaluation, policy improvement, policy iteration, value iteration, Q from V, greedy and ε-greedy, discounted return), step player with animations, data review form, IA1 examples.
-- Phase 2: question extraction with a local LLM (Ollama).
+- Phase 2 (done): question extraction with a local LLM (Ollama), keyword cross-check, offline part detection.
 - Phase 3: Monte Carlo, bandits, TD(0), SARSA, Q-learning.
 - Phase 4: n-step methods, tree backup, Dyna-Q, DQN.
 - Phase 5: predict-the-step game mode, theory cards.

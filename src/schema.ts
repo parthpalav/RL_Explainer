@@ -37,8 +37,8 @@ export type Part = z.infer<typeof PartSchema>;
 
 const Named = z.object({ id: Id, name: z.string().default('') });
 
-export const ProblemSchema = z
-  .object({
+// Structure only: what the LLM must return. Cross-field checks live in ProblemSchema.
+export const ProblemBase = z.object({
     title: z.string().default(''),
     states: z.array(Named).min(1),
     actions: z.array(Named).default([]),
@@ -50,8 +50,9 @@ export const ProblemSchema = z
     Q: z.array(z.object({ s: Id, a: Id, v: z.number() })).default([]),
     epsilon: z.number().min(0).max(1).optional(),
     parts: z.array(PartSchema).min(1),
-  })
-  .superRefine((p, ctx) => {
+  });
+
+export const ProblemSchema = ProblemBase.superRefine((p, ctx) => {
     const S = new Set(p.states.map((s) => s.id));
     const A = new Set(p.actions.map((a) => a.id));
     const bad = (path: (string | number)[], message: string) => ctx.addIssue({ code: 'custom', path, message });
