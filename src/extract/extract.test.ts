@@ -36,8 +36,9 @@ describe('clean', () => {
   });
   it('reads α, c, t and iteration counts written in words', () => {
     const p = { ...EXAMPLES[0].problem, parts: EXAMPLES[0].problem.parts.map((x) => ({ ...x, iterations: undefined })) };
-    const c = clean(p, 'Discount 0.8, learning rate 0.5. UCB with c = 1 at t = 6.');
-    expect([c.gamma, c.alpha, c.c, c.t]).toEqual([0.8, 0.5, 1, 6]);
+    const c = clean(p, 'Discount 0.8, learning rate 0.5. UCB with c = 1 at t = 6. Use 3-step TD.');
+    expect([c.gamma, c.alpha, c.c, c.t, c.n]).toEqual([0.8, 0.5, 1, 6, 3]);
+    expect(clean(p, 'Dyna-Q with 5 planning steps').n).toBe(5);
     expect(c.parts.map((x) => x.iterations)).toEqual([1, 2, undefined, undefined, undefined]);
     expect(clean({ ...p, parts: [{ ...p.parts[0], text: 'Run two sweeps of value iteration' }] }, '').parts[0].iterations).toBe(2);
   });
@@ -56,6 +57,9 @@ const essence = (p: Problem) => ({
   pulls: p.pulls.map((x) => x.r),
   arms: p.arms.map((x) => [x.n, x.wins]),
   c: p.c,
+  n: p.n,
+  replay: p.replay.map((x) => [x.r, x.done]),
+  Qtarget: p.Qtarget.map((x) => x.v).sort(),
   parts: p.parts.map((x) => [x.task, x.iterations ?? null]),
 });
 
@@ -101,6 +105,39 @@ b) Is B significantly better at the 5% level?`,
       parts: [{ task: 'ab_test' }, { task: 'ab_test' }],
     }),
   },
+  {
+    name: 'n-step',
+    text: `Rooms X, Y and Z, where Z is terminal. Actions: left, right. Discount factor 0.8, step size 0.2. Initial V and Q values are zero.
+Episode: X, right, reward 3 → Y, right, reward 5 → Z.
+a) Perform 3-step TD updates for the episode.
+b) Perform 3-step SARSA updates for the episode.`,
+    want: problem({
+      states: [{ id: 'X' }, { id: 'Y' }, { id: 'Z' }],
+      actions: [{ id: 'left' }, { id: 'right' }],
+      terminal: ['Z'],
+      gamma: 0.8,
+      alpha: 0.2,
+      n: 3,
+      episodes: [{ steps: [{ s: 'X', a: 'right', r: 3 }, { s: 'Y', a: 'right', r: 5 }], end: 'Z' }],
+      parts: [{ task: 'nstep_td' }, { task: 'nstep_sarsa' }],
+    }),
+  },
+  {
+    name: 'DQN',
+    text: `Two transitions are sampled from experience replay: (A, up, reward 2, next state B) and (B, down, reward -1, episode ends). Discount 0.95.
+The Q-network outputs Q(A, up) = 1.0 and Q(B, down) = 0.5. The target network gives Q̂(B, up) = 2.0 and Q̂(B, down) = 1.0.
+a) Find the TD target for each transition.
+b) Find the MSE loss.`,
+    want: problem({
+      states: [{ id: 'A' }, { id: 'B' }],
+      actions: [{ id: 'up' }, { id: 'down' }],
+      gamma: 0.95,
+      Q: [{ s: 'A', a: 'up', v: 1 }, { s: 'B', a: 'down', v: 0.5 }],
+      Qtarget: [{ s: 'B', a: 'up', v: 2 }, { s: 'B', a: 'down', v: 1 }],
+      replay: [{ s: 'A', a: 'up', r: 2, s2: 'B' }, { s: 'B', a: 'down', r: -1, done: true }],
+      parts: [{ task: 'dqn_target_loss' }, { task: 'dqn_target_loss' }],
+    }),
+  },
 ];
 
 // Real model run: OLLAMA=1 npx vitest run src/extract
@@ -117,7 +154,8 @@ describe.skipIf(!import.meta.env.OLLAMA)('LLM extraction of the IA1 questions', 
       const got = await extract(ex.text, model, { base: 'http://localhost:11434' });
       const { gamma: _g, ...rest } = essence(got); // γ is irrelevant for bandits and defaults differ
       const { gamma: _w, ...want } = essence(ex.want);
-      expect(ex.name === 'model-free' ? essence(got) : rest).toEqual(ex.name === 'model-free' ? essence(ex.want) : want);
+      const bandit = ex.name === 'bandit' || ex.name === 'A/B test';
+      expect(bandit ? rest : essence(got)).toEqual(bandit ? want : essence(ex.want));
     }, 300_000);
   }
 });

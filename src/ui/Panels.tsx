@@ -1,7 +1,8 @@
+import type { ReactNode } from 'react';
 import type { Problem } from '../schema';
 import type { Cell } from '../solvers/types';
 import {
-  REF_ALPHA, REF_C, REF_EPS, REF_GAMMA, REF_T, cellRef, domRef, edgeKey, focusEp, focusPull, idTex, refArm, refEpR, refP, refPi, refPull, refQ, refR,
+  REF_ALPHA, REF_C, REF_EPS, REF_GAMMA, REF_N, REF_T, cellRef, refB, refQT, refReplay, domRef, edgeKey, focusEp, focusPull, idTex, refArm, refEpR, refP, refPi, refPull, refQ, refR,
 } from '../mdp';
 import { fmt } from '../math/expr';
 import { Tex } from './Tex';
@@ -12,6 +13,24 @@ const Num = ({ r, v }: { r: string; v: number }) => (
     {fmt(v)}
   </span>
 );
+
+/** Two-column table of labelled given numbers; renders nothing when empty. */
+function KV({ caption, rows }: { caption: ReactNode; rows: [string, string, number][] }) {
+  if (!rows.length) return null;
+  return (
+    <table>
+      <caption>{caption}</caption>
+      <tbody>
+        {rows.map(([tex, r, v]) => (
+          <tr key={r}>
+            <td><Tex tex={tex} /></td>
+            <td><Num r={r} v={v} /></td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
 
 /** Everything given in the question. Each number carries data-ref so formulas can fly values out of it. */
 export function DataPanel({ p, active, focus }: { p: Problem; active: string[]; focus?: string }) {
@@ -32,6 +51,7 @@ export function DataPanel({ p, active, focus }: { p: Problem; active: string[]; 
         {chip('\\alpha', REF_ALPHA, p.alpha)}
         {chip('c', REF_C, p.c)}
         {chip('t', REF_T, p.t)}
+        {chip('n', REF_N, p.n)}
         {p.terminal.length > 0 && <span className="chip">terminal: {p.terminal.join(', ')}</span>}
       </div>
       {p.episodes.length > 0 && (
@@ -114,31 +134,35 @@ export function DataPanel({ p, active, focus }: { p: Problem; active: string[]; 
           </tbody>
         </table>
       )}
-      {p.policy.length > 0 && (
+      <KV caption={<>Policy <Tex tex="\pi(a\mid s)" /></>}
+        rows={p.policy.map((x) => [`\\pi(${idTex(x.a)}\\mid ${idTex(x.s)})`, refPi(x.s, x.a), x.p])} />
+      <KV caption={<>Behaviour policy <Tex tex="b(a\mid s)" /></>}
+        rows={p.behavior.map((x) => [`b(${idTex(x.a)}\\mid ${idTex(x.s)})`, refB(x.s, x.a), x.p])} />
+      <KV caption={p.Qtarget.length ? 'Online network Q(s,a)' : 'Given Q-values'}
+        rows={p.Q.map((x) => [`Q(${idTex(x.s)}, ${idTex(x.a)})`, refQ(x.s, x.a), x.v])} />
+      <KV caption="Target network Q̂(s,a)"
+        rows={p.Qtarget.map((x) => [`\\hat{Q}(${idTex(x.s)}, ${idTex(x.a)})`, refQT(x.s, x.a), x.v])} />
+      {p.replay.length > 0 && (
         <table>
-          <caption>Policy <Tex tex="\pi(a\mid s)" /></caption>
+          <caption>Replay minibatch</caption>
+          <thead>
+            <tr><th>i</th><th><Tex tex="s" /></th><th><Tex tex="a" /></th><th><Tex tex="r" /></th><th><Tex tex="s'" /></th></tr>
+          </thead>
           <tbody>
-            {p.policy.map((x) => (
-              <tr key={`${x.s}|${x.a}`}>
-                <td><Tex tex={`\\pi(${idTex(x.a)}\\mid ${idTex(x.s)})`} /></td>
-                <td><Num r={refPi(x.s, x.a)} v={x.p} /></td>
+            {p.replay.map((x, i) => (
+              <tr key={i}>
+                <td>{i + 1}</td>
+                <td><Tex tex={idTex(x.s)} /></td>
+                <td><Tex tex={idTex(x.a)} /></td>
+                <td><Num r={refReplay(i)} v={x.r} /></td>
+                <td>{x.done ? 'terminal' : <Tex tex={idTex(x.s2)} />}</td>
               </tr>
             ))}
           </tbody>
         </table>
       )}
-      {p.Q.length > 0 && (
-        <table>
-          <caption>Given Q-values</caption>
-          <tbody>
-            {p.Q.map((x) => (
-              <tr key={`${x.s}|${x.a}`}>
-                <td><Tex tex={`Q(${idTex(x.s)}, ${idTex(x.a)})`} /></td>
-                <td><Num r={refQ(x.s, x.a)} v={x.v} /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {p.planning.length > 0 && (
+        <p className="muted">Planning order: {p.planning.map((x) => `(${x.s}, ${x.a})`).join(', ')}</p>
       )}
       {(p.states.some((s) => s.name) || p.actions.some((a) => a.name)) && (
         <dl className="legend">

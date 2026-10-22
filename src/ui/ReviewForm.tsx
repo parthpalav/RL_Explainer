@@ -102,8 +102,8 @@ export function ReviewForm({ draft: d, setDraft, issues, warnings }: Props) {
           <input type="number" step="any" value={Number.isFinite(d.gamma) ? d.gamma : ''}
             onChange={(e) => up({ gamma: e.target.value === '' ? NaN : e.target.valueAsNumber })} />
         </label>
-        {(['epsilon', 'alpha', 'c', 't'] as const).map((k) => (
-          <label key={k}>{{ epsilon: 'ε', alpha: 'α (step size)', c: 'c (UCB)', t: 't (UCB time)' }[k]}
+        {(['epsilon', 'alpha', 'n', 'c', 't'] as const).map((k) => (
+          <label key={k}>{{ epsilon: 'ε', alpha: 'α (step size)', n: 'n (steps / planning)', c: 'c (UCB)', t: 't (UCB time)' }[k]}
             <input type="number" step="any" value={d[k] ?? ''} placeholder="—"
               onChange={(e) => up({ [k]: e.target.value === '' ? undefined : e.target.valueAsNumber })} />
           </label>
@@ -159,6 +159,19 @@ export function ReviewForm({ draft: d, setDraft, issues, warnings }: Props) {
       <Rows title="Bandit pulls (arm, reward)" rows={d.pulls} {...common} blank={{ a: '', r: NaN }}
         cols={[{ key: 'a', label: 'arm', kind: 'action' }, { key: 'r', label: 'reward', kind: 'number' }]}
         onChange={(pulls) => up({ pulls })} />
+      <Rows title="Behaviour policy b(a|s) (off-policy)" rows={d.behavior} {...common} blank={{ s: '', a: '', p: NaN }}
+        cols={[{ key: 's', label: 's', kind: 'state' }, { key: 'a', label: 'a', kind: 'action' }, { key: 'p', label: 'b(a|s)', kind: 'number' }]}
+        onChange={(behavior) => up({ behavior })} />
+      <Rows title="Dyna-Q planning order (s, a)" rows={d.planning} {...common} blank={{ s: '', a: '' }}
+        cols={[{ key: 's', label: 's', kind: 'state' }, { key: 'a', label: 'a', kind: 'action' }]}
+        onChange={(planning) => up({ planning })} />
+      <Rows title="DQN replay minibatch" rows={d.replay} {...common} blank={{ s: '', a: '', r: NaN, s2: '', done: false }}
+        cols={[{ key: 's', label: 's', kind: 'state' }, { key: 'a', label: 'a', kind: 'action' }, { key: 'r', label: 'r', kind: 'number' },
+          { key: 's2', label: "s'", kind: 'state' }, { key: 'done', label: 'terminal', kind: 'bool' }]}
+        onChange={(replay) => up({ replay })} />
+      <Rows title="DQN target network Q̂(s,a)" rows={d.Qtarget} {...common} blank={{ s: '', a: '', v: NaN }}
+        cols={[{ key: 's', label: 's', kind: 'state' }, { key: 'a', label: 'a', kind: 'action' }, { key: 'v', label: 'Q̂(s,a)', kind: 'number' }]}
+        onChange={(Qtarget) => up({ Qtarget })} />
       <Rows title="Arm snapshot (optional fields)" rows={d.arms} {...common} blank={{ a: '' }}
         cols={[{ key: 'a', label: 'arm', kind: 'action' }, { key: 'q', label: 'Q(a)', kind: 'optnum' }, { key: 'n', label: 'N(a) / visitors', kind: 'optnum' },
           { key: 'wins', label: 'conversions', kind: 'optnum' }]}

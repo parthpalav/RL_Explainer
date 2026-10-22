@@ -99,7 +99,9 @@ export const BATCH2 = problem({
   ],
 });
 
-import { FEWSHOT, FEWSHOT_BANDIT, FEWSHOT_BANDIT_TEXT, FEWSHOT_MF, FEWSHOT_MF_TEXT, FEWSHOT_TEXT } from './fewshot';
+import {
+  FEWSHOT, FEWSHOT_BANDIT, FEWSHOT_BANDIT_TEXT, FEWSHOT_DQN, FEWSHOT_DQN_TEXT, FEWSHOT_MF, FEWSHOT_MF_TEXT, FEWSHOT_NSTEP, FEWSHOT_NSTEP_TEXT, FEWSHOT_TEXT,
+} from './fewshot';
 
 export const EXAMPLES = [
   { name: 'IA1 Batch 1: Smart irrigation', text: BATCH1_TEXT, problem: BATCH1 },
@@ -107,4 +109,6 @@ export const EXAMPLES = [
   { name: 'Practice: DP basics (robot battery)', text: FEWSHOT_TEXT, problem: FEWSHOT },
   { name: 'Practice: MC, TD, SARSA, Q-learning', text: FEWSHOT_MF_TEXT, problem: FEWSHOT_MF },
   { name: 'Practice: bandits', text: FEWSHOT_BANDIT_TEXT, problem: FEWSHOT_BANDIT },
+  { name: 'Practice: n-step, tree backup, Dyna-Q', text: FEWSHOT_NSTEP_TEXT, problem: FEWSHOT_NSTEP },
+  { name: 'Practice: DQN targets and loss', text: FEWSHOT_DQN_TEXT, problem: FEWSHOT_DQN },
 ];

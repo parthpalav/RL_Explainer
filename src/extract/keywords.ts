@@ -4,6 +4,12 @@ import { HEADINGS } from '../solvers';
 
 // Most specific first: "ε-greedy" must win over "greedy", "policy iteration" over "policy".
 const RULES: [Task, RegExp][] = [
+  ['tree_backup', /tree[-\s]?backup/i],
+  ['nstep_offpolicy_is', /importance\s+sampling|off[-\s]policy\s+(\d+|n)[-\s]step/i],
+  ['nstep_sarsa', /\b(\d+|n)[-\s]step\s+sarsa/i],
+  ['nstep_td', /\b(\d+|n)[-\s]step\s+(TD|temporal)/i],
+  ['dyna_q', /\bdyna/i],
+  ['dqn_target_loss', /\bDQN\b|deep\s+q|replay\s+buffer|target\s+network/i],
   ['mc_control_epsilon_greedy', /monte[-\s]?carlo\s+control|\bMC\s+control/i],
   ['mc_prediction_every_visit', /every[-\s]visit/i],
   ['mc_prediction_first_visit', /first[-\s]visit|monte[-\s]?carlo/i],
@@ -64,8 +70,10 @@ export function crossCheck(parts: Part[]): string[] {
 export function splitParts(text: string): Part[] {
   const re = /(?:^|\n)\s*\(?([a-h]|[1-9])[).]\s+/g;
   const marks = [...text.matchAll(re)];
+  // A part with no keyword of its own ("compute the target y") inherits the topic of the intro text.
+  const intro = detectTasks(text.slice(0, marks[0]?.index ?? 0))[0];
   return marks.map((m, i) => {
     const body = text.slice(m.index! + m[0].length, marks[i + 1]?.index ?? text.length).trim();
-    return { label: m[1], task: detectTasks(body)[0] ?? 'theory', states: [], rewards: [], episodes: [], text: body };
+    return { label: m[1], task: detectTasks(body)[0] ?? intro ?? 'theory', states: [], rewards: [], episodes: [], text: body };
   });
 }

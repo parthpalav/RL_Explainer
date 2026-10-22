@@ -26,6 +26,12 @@ export const TASKS = [
   'bandit_epsilon_greedy',
   'bandit_ucb',
   'ab_test',
+  'nstep_td',
+  'nstep_sarsa',
+  'nstep_offpolicy_is',
+  'tree_backup',
+  'dyna_q',
+  'dqn_target_loss',
   'theory',
 ] as const;
 export type Task = (typeof TASKS)[number];
@@ -78,6 +84,14 @@ export const ProblemBase = z.object({
     // per-arm estimate q, pull count n and successes wins (A/B tests).
     pulls: z.array(z.object({ a: Id, r: z.number() })).default([]),
     arms: z.array(z.object({ a: Id, q: z.number().optional(), n: z.number().min(0).optional(), wins: z.number().min(0).optional() })).default([]),
+    n: z.number().int().min(1).max(20).optional(), // n-step length, or Dyna-Q planning steps per real step
+    // Behaviour policy b(a|s) for off-policy learning; "policy" is then the target policy pi.
+    behavior: z.array(z.object({ s: Id, a: Id, p: z.number().min(0).max(1) })).default([]),
+    // Dyna-Q: (s, a) pairs replayed from the model, in order. Empty: replay observed pairs in order.
+    planning: z.array(z.object({ s: Id, a: Id })).default([]),
+    // DQN replay minibatch; Q holds the online network's values, Qtarget the target network's.
+    replay: z.array(z.object({ s: Id, a: Id, r: z.number(), s2: z.string().trim().default(''), done: z.boolean().default(false) })).default([]),
+    Qtarget: z.array(z.object({ s: Id, a: Id, v: z.number() })).default([]),
     c: z.number().min(0).optional(), // UCB exploration constant
     t: z.number().int().min(1).optional(), // UCB time step
     parts: z.array(PartSchema).min(1),
@@ -118,6 +132,17 @@ export const ProblemSchema = ProblemBase.superRefine((p, ctx) => {
       if (ep.endAction) ac(ep.endAction, ['episodes', e, 'endAction']);
     });
     p.pulls.forEach((x, i) => ac(x.a, ['pulls', i, 'a']));
+    for (const k of ['behavior', 'planning', 'Qtarget'] as const)
+      p[k].forEach((x, i) => {
+        st(x.s, [k, i, 's']);
+        ac(x.a, [k, i, 'a']);
+      });
+    p.replay.forEach((x, i) => {
+      st(x.s, ['replay', i, 's']);
+      ac(x.a, ['replay', i, 'a']);
+      if (x.s2) st(x.s2, ['replay', i, 's2']);
+      else if (!x.done) bad(['replay', i, 's2'], 'Next state missing (or mark the transition as done)');
+    });
     p.arms.forEach((x, i) => ac(x.a, ['arms', i, 'a']));
 
     const sums = new Map<string, number>();
@@ -125,10 +150,12 @@ export const ProblemSchema = ProblemBase.superRefine((p, ctx) => {
     for (const [k, v] of sums)
       if (Math.abs(v - 1) > 1e-6) bad(['transitions'], `Probabilities for (${k}) add up to ${+v.toFixed(6)}, not 1`);
 
-    const pol = new Map<string, number>();
-    for (const x of p.policy) pol.set(x.s, (pol.get(x.s) ?? 0) + x.p);
-    for (const [s, v] of pol)
-      if (Math.abs(v - 1) > 1e-6) bad(['policy'], `Policy probabilities for ${s} add up to ${+v.toFixed(6)}, not 1`);
+    for (const k of ['policy', 'behavior'] as const) {
+      const pol = new Map<string, number>();
+      for (const x of p[k]) pol.set(x.s, (pol.get(x.s) ?? 0) + x.p);
+      for (const [s, v] of pol)
+        if (Math.abs(v - 1) > 1e-6) bad([k], `${k === 'policy' ? 'Policy' : 'Behaviour policy'} probabilities for ${s} add up to ${+v.toFixed(6)}, not 1`);
+    }
   });
 
 export type Problem = z.infer<typeof ProblemSchema>;

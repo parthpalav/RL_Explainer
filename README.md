@@ -29,5 +29,5 @@ Without Ollama, "Detect parts only" splits the sub-questions and guesses each al
 - Phase 1 (done): dynamic programming solvers (policy evaluation, in-place evaluation, exact linear-system evaluation, policy improvement, policy iteration, value iteration, Q from V, greedy and ε-greedy, discounted return), step player with animations, data review form, IA1 examples.
 - Phase 2 (done): question extraction with a local LLM (Ollama), keyword cross-check, offline part detection.
 - Phase 3 (done): Monte Carlo prediction (first/every-visit, constant-α) and control, TD(0), SARSA, Q-learning, bandits (sample average, incremental, ε-greedy, UCB), A/B test, episode and pull timeline, practice examples.
-- Phase 4: n-step methods, tree backup, Dyna-Q, DQN.
+- Phase 4 (done): n-step TD and SARSA, off-policy n-step SARSA with importance sampling, n-step tree backup, Dyna-Q, DQN targets and loss.
 - Phase 5: predict-the-step game mode, theory cards.

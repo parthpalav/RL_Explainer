@@ -3,7 +3,9 @@
 import { z } from 'zod';
 import { ProblemBase, type Problem } from '../schema';
 import { HEADINGS } from '../solvers';
-import { FEWSHOT, FEWSHOT_BANDIT, FEWSHOT_BANDIT_TEXT, FEWSHOT_MF, FEWSHOT_MF_TEXT, FEWSHOT_TEXT } from '../fixtures/fewshot';
+import {
+  FEWSHOT, FEWSHOT_BANDIT, FEWSHOT_BANDIT_TEXT, FEWSHOT_DQN, FEWSHOT_DQN_TEXT, FEWSHOT_MF, FEWSHOT_MF_TEXT, FEWSHOT_NSTEP, FEWSHOT_NSTEP_TEXT, FEWSHOT_TEXT,
+} from '../fixtures/fewshot';
 import { detectTasks } from './keywords';
 
 export const DEFAULT_MODEL = 'qwen2.5:7b';
@@ -33,6 +35,12 @@ const TASK_HINTS: Record<string, string> = {
   bandit_epsilon_greedy: 'probability of choosing each bandit arm under epsilon-greedy',
   bandit_ucb: 'UCB arm selection (needs c, and t if given)',
   ab_test: 'A/B test: conversion rates and z-test (variants are actions; arms.n = visitors, arms.wins = conversions)',
+  nstep_td: 'n-step TD updates of V from episodes (needs n, alpha)',
+  nstep_sarsa: 'n-step SARSA updates of Q from episodes (needs n, alpha)',
+  nstep_offpolicy_is: 'off-policy n-step SARSA with importance sampling ratio (policy = target pi, behavior = b)',
+  tree_backup: 'n-step tree backup (policy = target pi)',
+  dyna_q: 'Dyna-Q: Q-learning on real steps plus n planning updates from the learned model',
+  dqn_target_loss: 'DQN targets y = r + gamma max Q_target(s\', a\') and mean squared loss over a replay minibatch',
   theory: 'explain / compare / define: no calculation',
 };
 
@@ -47,6 +55,8 @@ Rules:
 - epsilon, alpha (α, step size / learning rate), c (UCB constant), t (UCB time step): copy if they appear anywhere, including inside a sub-question.
 - episodes: each step is (s, a, r) = state, action taken, reward received after it. "end" is the state reached after the last step. "endAction" is the action taken there, only if given. Leave "a" empty if the question gives no actions.
 - pulls: bandit history, one (a, r) row per pull, in order. arms: per-arm snapshot (q estimate, n pull count / visitors, wins conversions), only if given. Bandit arms are listed as actions; bandit questions have no states.
+- n: the n of n-step methods, or the number of Dyna-Q planning steps per real step. behavior: behaviour policy b(a|s) for off-policy methods (then "policy" is the target policy). planning: (s, a) pairs Dyna-Q replays, only if listed.
+- DQN: replay = minibatch rows (s, a, r, s2, done). Q = online network predictions, Qtarget = target network values.
 - parts.episodes: 1-based episode numbers a part uses ("episode 2" -> [2]); [] means all.
 - parts: one per sub-question (a, b, c, ...), in order. "label" is the letter, "text" the sub-question.
   "iterations" is the final iteration index the part asks for: "compute V2" -> 2, "2 iterations" -> 2.
@@ -59,6 +69,8 @@ const SCHEMA = z.toJSONSchema(ProblemBase, { io: 'output' });
 
 const MF = /^(mc_|td0|sarsa|q_learning)/;
 const BANDIT = /^(bandit_|ab_test)/;
+const NSTEP = /^(nstep_|tree_backup|dyna_q)/;
+const DQN = /^dqn/;
 
 /** Show the model the worked example(s) closest to this question, to keep the prompt short. */
 function examplesFor(text: string) {
@@ -66,6 +78,8 @@ function examplesFor(text: string) {
   const picks = [
     found.some((t) => MF.test(t)) && ([FEWSHOT_MF_TEXT, FEWSHOT_MF] as const),
     found.some((t) => BANDIT.test(t)) && ([FEWSHOT_BANDIT_TEXT, FEWSHOT_BANDIT] as const),
+    found.some((t) => NSTEP.test(t)) && ([FEWSHOT_NSTEP_TEXT, FEWSHOT_NSTEP] as const),
+    found.some((t) => DQN.test(t)) && ([FEWSHOT_DQN_TEXT, FEWSHOT_DQN] as const),
   ].filter((x) => x !== false);
   return (picks.length ? picks : [[FEWSHOT_TEXT, FEWSHOT] as const]).flatMap(([q, a]) => [
     { role: 'user', content: q },
@@ -119,6 +133,7 @@ export function clean(p: Problem, text: string): Problem {
   const gamma = numAfter(text, new RegExp(String.raw`(?:γ|gamma|discount(?:\s+factor)?)` + V, 'i'));
   const epsilon = numAfter(text, new RegExp(String.raw`(?:ε|epsilon)` + V, 'i'));
   const alpha = numAfter(text, new RegExp(String.raw`(?:α|alpha|step[-\s]size|learning\s+rate)` + V, 'i'));
+  const n = numAfter(text, /\b(\d+)[-\s]step\b/i) ?? numAfter(text, /\bn\s*=\s*(\d+)/) ?? numAfter(text, /\b(\d+)\s+planning\s+(?:steps?|updates?)/i);
   const ucb = /\bUCB\b|upper\s+confidence/i.test(text);
   const c = ucb ? numAfter(text, /\bc\s*=\s*(\d*\.?\d+)/) : undefined;
   const t = ucb ? numAfter(text, /\bt\s*=\s*(\d+)/) : undefined;
@@ -128,6 +143,7 @@ export function clean(p: Problem, text: string): Problem {
     epsilon: epsilon ?? p.epsilon,
     alpha: alpha ?? p.alpha,
     c: c ?? p.c,
+    n: n ?? p.n,
     t: t ?? p.t,
     policy: p.policy.filter((x) => x.p > 0),
     parts: p.parts.map((pt) => ({ ...pt, iterations: pt.iterations ?? iterationsIn(pt.text) })),

@@ -24,13 +24,13 @@ export function need<T>(v: T | undefined, what: string): T {
 }
 
 /** The episodes a part uses, with their original index so refs match the timeline. */
-const episodes = (p: Problem, part: Part) => {
+export const episodes = (p: Problem, part: Part) => {
   if (!p.episodes.length) throw new Error('This part needs at least one episode (sequence of states, actions and rewards)');
   const all = p.episodes.map((ep, e) => ({ ep, e }));
   return part.episodes.length ? all.filter(({ e }) => part.episodes.includes(e + 1)) : all;
 };
 
-type Ep = Problem['episodes'][number];
+export type Ep = Problem['episodes'][number];
 /** State after step t, or null when the episode ends in a terminal state. */
 const nextOf = (p: Problem, ep: Ep, t: number): string | null => {
   const s = t + 1 < ep.steps.length ? ep.steps[t + 1].s : ep.end;
@@ -132,15 +132,15 @@ function mcPrediction(firstVisit: boolean): Solver {
   };
 }
 
-const actionIds = (p: Problem) => {
+export const actionIds = (p: Problem) => {
   if (!p.actions.length) throw new Error('This part needs the list of actions');
   return p.actions.map((a) => a.id);
 };
-const qKey = (s: string, a: string) => `${s}|${a}`;
-const initialQ = (p: Problem) => new Map(p.Q.map((x) => [qKey(x.s, x.a), x.v]));
+export const qKey = (s: string, a: string) => `${s}|${a}`;
+export const initialQ = (p: Problem) => new Map(p.Q.map((x) => [qKey(x.s, x.a), x.v]));
 
 /** The "Given" step for a Q-table: all non-terminal states x actions, missing entries 0. */
-function givenQ(p: Problem, Q: Map<string, number>, cell: (s: string, a: string) => Cell, why: string): Step {
+export function givenQ(p: Problem, Q: Map<string, number>, cell: (s: string, a: string) => Cell, why: string): Step {
   const S = p.states.map((s) => s.id).filter((s) => !p.terminal.includes(s));
   const A = actionIds(p);
   const all = S.flatMap((s) => A.map((a) => [s, a] as const));

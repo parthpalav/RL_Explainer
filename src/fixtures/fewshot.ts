@@ -108,3 +108,50 @@ export const FEWSHOT_BANDIT = problem({
     { label: 'd', task: 'bandit_ucb', text: 'UCB with c = 2 at t = 6: which arm is selected?' },
   ],
 });
+
+export const FEWSHOT_NSTEP_TEXT = `States S1, S2 and terminal state S3. Actions A1, A2. γ = 0.9, α = 0.5. All values and Q-values start at 0. Target policy π: always A1. Behaviour policy b: A1 and A2 each with probability 0.5.
+Episode: S1, A1, +1 → S2, A1, +2 → S3.
+a) Compute the 2-step TD updates of V for the states visited.
+b) Apply 2-step SARSA to the episode.
+c) Apply off-policy 2-step SARSA with importance sampling.
+d) Apply the 2-step tree backup algorithm.
+e) Run Dyna-Q on the episode with 2 planning steps after each real step.`;
+
+export const FEWSHOT_NSTEP = problem({
+  title: 'n-step methods',
+  states: [{ id: 'S1' }, { id: 'S2' }, { id: 'S3' }],
+  actions: [{ id: 'A1' }, { id: 'A2' }],
+  terminal: ['S3'],
+  gamma: 0.9,
+  alpha: 0.5,
+  n: 2,
+  policy: [{ s: 'S1', a: 'A1', p: 1 }, { s: 'S2', a: 'A1', p: 1 }],
+  behavior: [{ s: 'S1', a: 'A1', p: 0.5 }, { s: 'S1', a: 'A2', p: 0.5 }, { s: 'S2', a: 'A1', p: 0.5 }, { s: 'S2', a: 'A2', p: 0.5 }],
+  episodes: [{ steps: [{ s: 'S1', a: 'A1', r: 1 }, { s: 'S2', a: 'A1', r: 2 }], end: 'S3' }],
+  parts: [
+    { label: 'a', task: 'nstep_td', text: '2-step TD updates of V.' },
+    { label: 'b', task: 'nstep_sarsa', text: '2-step SARSA on the episode.' },
+    { label: 'c', task: 'nstep_offpolicy_is', text: 'Off-policy 2-step SARSA with importance sampling.' },
+    { label: 'd', task: 'tree_backup', text: '2-step tree backup.' },
+    { label: 'e', task: 'dyna_q', text: 'Dyna-Q with 2 planning steps after each real step.' },
+  ],
+});
+
+export const FEWSHOT_DQN_TEXT = `A DQN agent samples a minibatch from its replay buffer: (S1, A1, r = 1, S2) and (S2, A2, r = 0, terminal). γ = 0.9.
+The online network predicts Q(S1, A1) = 0.4 and Q(S2, A2) = 0.2. The target network gives Q̂(S2, A1) = 1.5 and Q̂(S2, A2) = 0.8.
+a) Compute the target y for each transition.
+b) Compute the mean squared loss of the minibatch.`;
+
+export const FEWSHOT_DQN = problem({
+  title: 'DQN minibatch',
+  states: [{ id: 'S1' }, { id: 'S2' }],
+  actions: [{ id: 'A1' }, { id: 'A2' }],
+  gamma: 0.9,
+  Q: [{ s: 'S1', a: 'A1', v: 0.4 }, { s: 'S2', a: 'A2', v: 0.2 }],
+  Qtarget: [{ s: 'S2', a: 'A1', v: 1.5 }, { s: 'S2', a: 'A2', v: 0.8 }],
+  replay: [{ s: 'S1', a: 'A1', r: 1, s2: 'S2' }, { s: 'S2', a: 'A2', r: 0, done: true }],
+  parts: [
+    { label: 'a', task: 'dqn_target_loss', text: 'Target y for each transition.' },
+    { label: 'b', task: 'dqn_target_loss', text: 'Mean squared loss of the minibatch.' },
+  ],
+});

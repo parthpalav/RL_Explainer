@@ -3,8 +3,9 @@ import type { Ctx, PartTrace, Solver } from './types';
 import { DP } from './dp';
 import { MODEL_FREE } from './modelfree';
 import { BANDIT } from './bandit';
+import { NSTEP } from './nstep';
 
-export const SOLVERS: Record<Task, Solver> = { ...DP, ...MODEL_FREE, ...BANDIT };
+export const SOLVERS: Record<Task, Solver> = { ...DP, ...MODEL_FREE, ...BANDIT, ...NSTEP };
 
 export const HEADINGS: Record<Task, string> = {
   return_Gt: 'Discounted return',
@@ -31,6 +32,12 @@ export const HEADINGS: Record<Task, string> = {
   bandit_epsilon_greedy: 'Bandit: ε-greedy arm probabilities',
   bandit_ucb: 'Bandit: UCB arm selection',
   ab_test: 'A/B test',
+  nstep_td: 'n-step TD prediction',
+  nstep_sarsa: 'n-step SARSA',
+  nstep_offpolicy_is: 'Off-policy n-step SARSA (importance sampling)',
+  tree_backup: 'n-step tree backup',
+  dyna_q: 'Dyna-Q (planning + learning)',
+  dqn_target_loss: 'DQN targets and loss',
   theory: 'Theory',
 };
 
