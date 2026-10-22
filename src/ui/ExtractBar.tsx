@@ -17,10 +17,12 @@ interface Props {
   question: string;
   onProblem: (p: Problem) => void;
   onParts: (parts: Part[]) => void;
+  known?: Problem; // the question is an unedited built-in example: use its data instead of the model
+  onBusy?: (busy: boolean) => void;
 }
 
 /** Ollama status, model picker and the extract button. */
-export function ExtractBar({ question, onProblem, onParts }: Props) {
+export function ExtractBar({ question, onProblem, onParts, known, onBusy }: Props) {
   const [models, setModels] = useState<string[] | null>(null);
   const [offline, setOffline] = useState(false);
   const [model, setModel] = useState(load);
@@ -56,12 +58,19 @@ export function ExtractBar({ question, onProblem, onParts }: Props) {
     }
   };
 
+  useEffect(() => onBusy?.(busy), [busy, onBusy]);
+
   const run = async () => {
     setError('');
     setBusy(true);
     setSecs(0);
     abort.current = new AbortController();
     try {
+      if (known) {
+        await new Promise((r) => setTimeout(r, 1400)); // long enough to see what is being read
+        if (!abort.current.signal.aborted) onProblem(known);
+        return;
+      }
       onProblem(await extract(question, model, { signal: abort.current.signal }));
     } catch (e) {
       const err = e as Error;
@@ -93,8 +102,8 @@ export function ExtractBar({ question, onProblem, onParts }: Props) {
             <span className="spinner" aria-hidden="true" /> Reading question… {secs}s · Stop
           </button>
         ) : (
-          <button className="primary grow" onClick={run} disabled={!question.trim() || offline || !!missing}>
-            <Icon name="spark" size={16} /> Extract data with local LLM
+          <button className="primary grow" onClick={run} disabled={!question.trim() || (!known && (offline || !!missing))}>
+            <Icon name="spark" size={16} /> {known ? 'Read the example' : 'Extract data with local LLM'}
           </button>
         )}
         <button className="ghost" onClick={() => onParts(splitParts(question))} disabled={busy} title="Split sub-questions and guess tasks from keywords, without the LLM">
@@ -107,7 +116,7 @@ export function ExtractBar({ question, onProblem, onParts }: Props) {
         </p>
       )}
       {missing && <p className="warn">Model not installed. Run <code>ollama pull {model}</code>.</p>}
-      {busy && <p className="muted small">A 7B model takes about 30–90 s on an M4.</p>}
+      {busy && !known && <p className="muted small">A 7B model takes about 30–90 s on an M4.</p>}
       {error && <p className="err" role="alert">{error}</p>}
     </div>
   );
