@@ -1,0 +1,89 @@
+import { z } from 'zod';
+
+// Every task id the extractor may pick. Solvers live in src/solvers/index.ts.
+export const TASKS = [
+  'return_Gt',
+  'bellman_v',
+  'q_from_v',
+  'bellman_optimality',
+  'policy_evaluation',
+  'policy_evaluation_inplace',
+  'policy_evaluation_linear',
+  'policy_improvement',
+  'policy_iteration',
+  'value_iteration',
+  'greedy_action',
+  'epsilon_greedy_probs',
+  'best_state',
+  'theory',
+] as const;
+export type Task = (typeof TASKS)[number];
+
+const Id = z.string().trim().min(1);
+
+export const PartSchema = z.object({
+  label: z.string().default(''),
+  task: z.enum(TASKS),
+  // Final iteration index the part asks for (e.g. "compute V2" -> 2, "2 iterations" -> 2).
+  iterations: z.number().int().min(1).max(50).optional(),
+  // Restrict the part to these states; empty means all non-terminal states.
+  states: z.array(Id).default([]),
+  // Reward sequence R1, R2, ... for return_Gt.
+  rewards: z.array(z.number()).default([]),
+  // Free text of the sub-question, shown above its steps.
+  text: z.string().default(''),
+});
+export type Part = z.infer<typeof PartSchema>;
+
+const Named = z.object({ id: Id, name: z.string().default('') });
+
+export const ProblemSchema = z
+  .object({
+    title: z.string().default(''),
+    states: z.array(Named).min(1),
+    actions: z.array(Named).default([]),
+    terminal: z.array(Id).default([]),
+    gamma: z.number().min(0).max(1).default(0.9),
+    transitions: z.array(z.object({ s: Id, a: Id, s2: Id, p: z.number().min(0).max(1), r: z.number() })).default([]),
+    policy: z.array(z.object({ s: Id, a: Id, p: z.number().min(0).max(1) })).default([]),
+    V0: z.array(z.object({ s: Id, v: z.number() })).default([]),
+    Q: z.array(z.object({ s: Id, a: Id, v: z.number() })).default([]),
+    epsilon: z.number().min(0).max(1).optional(),
+    parts: z.array(PartSchema).min(1),
+  })
+  .superRefine((p, ctx) => {
+    const S = new Set(p.states.map((s) => s.id));
+    const A = new Set(p.actions.map((a) => a.id));
+    const bad = (path: (string | number)[], message: string) => ctx.addIssue({ code: 'custom', path, message });
+    const st = (v: string, path: (string | number)[]) => S.has(v) || bad(path, `Unknown state "${v}"`);
+    const ac = (v: string, path: (string | number)[]) => A.has(v) || bad(path, `Unknown action "${v}"`);
+
+    p.terminal.forEach((s, i) => st(s, ['terminal', i]));
+    p.transitions.forEach((t, i) => {
+      st(t.s, ['transitions', i, 's']);
+      ac(t.a, ['transitions', i, 'a']);
+      st(t.s2, ['transitions', i, 's2']);
+    });
+    p.policy.forEach((x, i) => {
+      st(x.s, ['policy', i, 's']);
+      ac(x.a, ['policy', i, 'a']);
+    });
+    p.V0.forEach((x, i) => st(x.s, ['V0', i, 's']));
+    p.Q.forEach((x, i) => {
+      st(x.s, ['Q', i, 's']);
+      ac(x.a, ['Q', i, 'a']);
+    });
+    p.parts.forEach((pt, i) => pt.states.forEach((s, j) => st(s, ['parts', i, 'states', j])));
+
+    const sums = new Map<string, number>();
+    for (const t of p.transitions) sums.set(`${t.s}, ${t.a}`, (sums.get(`${t.s}, ${t.a}`) ?? 0) + t.p);
+    for (const [k, v] of sums)
+      if (Math.abs(v - 1) > 1e-6) bad(['transitions'], `Probabilities for (${k}) add up to ${+v.toFixed(6)}, not 1`);
+
+    const pol = new Map<string, number>();
+    for (const x of p.policy) pol.set(x.s, (pol.get(x.s) ?? 0) + x.p);
+    for (const [s, v] of pol)
+      if (Math.abs(v - 1) > 1e-6) bad(['policy'], `Policy probabilities for ${s} add up to ${+v.toFixed(6)}, not 1`);
+  });
+
+export type Problem = z.infer<typeof ProblemSchema>;
