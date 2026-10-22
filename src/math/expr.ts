@@ -73,9 +73,10 @@ export function chain(e: Expr): Expr[] {
   return out;
 }
 
+/** 6 significant digits: enough that every written line checks out by hand from the numbers shown. */
 export function fmt(v: number): string {
-  const r = Math.round(v * 1e4) / 1e4;
-  return (Object.is(r, -0) ? 0 : r).toString();
+  if (Math.abs(v) < 1e-9) return '0'; // float noise like 1e-17
+  return Number(v.toPrecision(6)).toString();
 }
 
 /** Refs end up inside KaTeX \htmlData and HTML attributes: keep them to [A-Za-z0-9-]. */

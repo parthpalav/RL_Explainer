@@ -10,6 +10,7 @@ All maths is done by deterministic code (`src/solvers`). A language model is onl
 npm install
 npm run dev     # http://localhost:5173
 npm test        # solver tests against the IA1 answers
+npm run verify  # 1200 random problems vs an independent Python reference (needs numpy)
 ```
 
 ### Question extraction (optional)

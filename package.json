@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "test": "vitest run"
+    "test": "vitest run",
+    "verify": "python3 -I scripts/verify/ref.py gen .verify/problems.json 7 1200 && DUMP_IN=.verify/problems.json DUMP_OUT=.verify/dump.json vitest run src/verify.dump.test.ts && python3 -I scripts/verify/ref.py check .verify/problems.json .verify/dump.json"
   },
   "dependencies": {
     "gsap": "^3.15.0",

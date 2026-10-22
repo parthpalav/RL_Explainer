@@ -34,7 +34,9 @@ describe('expr', () => {
   it('formats floats cleanly', () => {
     expect(fmt(0.1 + 0.2)).toBe('0.3');
     expect(fmt(9.4 / 0.84)).toBe('11.1905');
-    expect(fmt(-0.00001)).toBe('0');
+    expect(fmt(1e-12)).toBe('0');
+    expect(fmt(0.00006975)).toBe('0.00006975'); // small values keep their significant digits
+    expect(fmt(2.6 / 0.9 + 0.1)).toBe('2.98889');
   });
 });
 

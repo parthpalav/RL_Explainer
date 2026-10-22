@@ -258,7 +258,8 @@ function valueIteration(defaultIters = 1): Solver {
         const qs = acts.map((a) => imp.steps[acts.indexOf(a)].results[0].value as number);
         const e = max(...acts.map((a, i) => num(qs[i], cellRef(qCell(qT, s, a)))));
         const v = evaluate(e);
-        const best = acts[qs.indexOf(Math.max(...qs))];
+        const top = Math.max(...qs);
+        const best = acts[qs.findIndex((q) => Math.abs(q - top) < 1e-9)]; // same tie rule as argmaxLines
         const lhs = `V_{${k + 1}}(${sT(s)})`;
         steps.push({
           title: `Sweep ${k + 1}: $${lhs}$${nm(p, s)}`,
