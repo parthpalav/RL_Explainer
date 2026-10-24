@@ -270,7 +270,7 @@ input[type='number'] { font-variant-numeric: tabular-nums; }
 .banner.bad { background: var(--bad-soft); color: var(--bad); border: 1px solid rgb(255 143 143 / 0.25); }
 .banner.warn { background: var(--warn-soft); color: var(--warn); border: 1px solid rgb(245 199 106 / 0.22); }
 
-.sec { background: var(--s2); border: 1px solid var(--line); border-radius: 12px; padding: 4px 14px; min-width: 0; }
+.sec { background: linear-gradient(180deg, rgb(255 255 255 / 0.025), transparent 60px), var(--s2); border: 1px solid var(--line); border-radius: 14px; padding: 4px 16px; min-width: 0; box-shadow: 0 1px 0 rgb(255 255 255 / 0.03) inset; }
 .sec.static { padding: 12px 14px 14px; }
 .sec summary, .sec-head { display: flex; align-items: center; gap: 8px; list-style: none; }
 .sec summary { cursor: pointer; padding: 9px 0; user-select: none; }
@@ -282,18 +282,122 @@ input[type='number'] { font-variant-numeric: tabular-nums; }
 .sec-title { font-weight: 600; font-size: 13.5px; }
 .count { font-size: 11.5px; font-weight: 600; color: var(--ink-3); background: var(--s1); border-radius: 99px; padding: 0 8px; line-height: 20px; }
 .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
-.table-wrap { overflow-x: auto; }
-table.edit { border-collapse: separate; border-spacing: 0 4px; }
-table.edit th { font-weight: 500; color: var(--ink-3); text-align: left; padding: 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
-table.edit td { padding: 0 3px; }
-table.edit td input:not([type]) { width: 130px; }
-table.edit input[type='number'] { width: 92px; }
-table.edit select { min-width: 66px; }
+/* ---------- editable data tables ---------- */
+.table-wrap {
+  overflow-x: auto; border-radius: 12px; border: 1px solid var(--line);
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.02), transparent 44px), var(--bg);
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.03) inset, 0 10px 24px -18px rgb(0 0 0 / 0.8);
+}
+table.edit { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13.5px; }
+table.edit th {
+  font-weight: 600; color: var(--ink-3); text-align: left; padding: 10px 10px 9px; white-space: nowrap;
+  font-size: 12px; letter-spacing: 0.02em; /* no uppercase: headers hold notation like π(a|s) */
+  background: rgb(255 255 255 / 0.025); border-bottom: 1px solid var(--line-2);
+}
+table.edit td { padding: 5px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; white-space: nowrap; }
+table.edit tbody tr:last-child td { border-bottom: none; }
+table.edit tbody tr:not(.gap) { transition: background 0.18s var(--ease); }
+table.edit tbody tr:not(.gap):hover, table.edit tbody tr:not(.gap):focus-within { background: linear-gradient(90deg, var(--accent-soft), rgb(139 149 255 / 0.03) 70%, transparent); }
+table.edit tbody tr:not(.gap):focus-within td.ix { color: var(--accent); }
+/* shrink-to-fit columns; the filler takes the slack so values stay together on the left */
+table.edit :is(th, td):not(.fill):not(.k-text) { width: 1%; }
+table.edit .fill { width: auto; padding: 0; }
+table.edit .k-text { min-width: 100px; }
+table.edit .ix { padding-left: 14px; padding-right: 2px; text-align: right; color: var(--ink-3); font: 500 11px ui-monospace, 'SF Mono', Menlo, monospace; }
+table.edit .arrow { padding: 0 2px; color: var(--ink-3); font-size: 15px; text-align: center; }
+table.edit .rm { padding-right: 10px; }
+table.edit .rm button.icon { opacity: 0; transition: opacity 0.15s; }
+table.edit tr:hover .rm button.icon, table.edit tr:focus-within .rm button.icon { opacity: 1; }
 
-.params { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+/* group cards: a gap row splits (s, a) groups; repeated keys fade */
+table.edit tr.gap td { padding: 0; height: 8px; border-bottom: 1px solid var(--line); background: rgb(0 0 0 / 0.25); box-shadow: inset 0 1px 0 var(--line); }
+table.edit tr.repeat td.g select { opacity: 0.28; }
+table.edit tr.repeat:hover td.g select, table.edit tr.repeat td.g select:focus { opacity: 1; }
+
+/* inputs read as plain values until hovered or focused */
+table.edit :is(input:not([type='checkbox']), select) {
+  background: transparent; border-color: transparent; border-radius: 8px; padding: 5px 9px; min-width: 0; font-size: 13.5px;
+}
+table.edit :is(input:not([type='checkbox']), select):hover { background: var(--s3); border-color: var(--line-2); }
+table.edit :is(input:not([type='checkbox']), select):focus { background: var(--s1); border-color: var(--accent); }
+table.edit .k-text input { width: 100%; }
+
+/* state / action chips */
+table.edit :is(.k-state, .k-action) select {
+  border-radius: 999px; padding: 3px 24px 3px 11px; font-weight: 600; font-size: 12.5px; letter-spacing: 0.01em;
+  background-position: right 8px center; background-size: 10px;
+}
+table.edit .k-state select { color: var(--given); background-color: var(--given-soft); border-color: rgb(95 212 196 / 0.22); }
+table.edit .k-action select { color: var(--accent); background-color: var(--accent-soft); border-color: rgb(139 149 255 / 0.25); }
+table.edit .k-state select:hover { background-color: rgb(95 212 196 / 0.2); border-color: rgb(95 212 196 / 0.45); }
+table.edit .k-action select:hover { background-color: rgb(139 149 255 / 0.22); border-color: rgb(139 149 255 / 0.5); }
+table.edit :is(.k-state, .k-action) select.empty { color: var(--bad); background-color: var(--bad-soft); border-color: rgb(255 143 143 / 0.3); border-style: dashed; }
+table.edit select option { color: var(--ink); background: var(--s2); }
+
+/* numbers */
+table.edit .num { display: flex; align-items: center; gap: 10px; }
+table.edit .num input { width: 84px; text-align: right; font: 500 13.5px ui-monospace, 'SF Mono', Menlo, monospace; font-variant-numeric: tabular-nums; }
+table.edit .num input::-webkit-inner-spin-button { display: none; }
+table.edit .num input::placeholder { color: var(--bad); opacity: 0.7; }
+table.edit td.k-optnum .num input::placeholder { color: var(--ink-3); }
+table.edit th:is(.k-number, .k-optnum) { text-align: right; padding-right: 18px; }
+table.edit th.t-prob { text-align: left; padding-left: 18px; }
+table.edit .t-prob .num input { text-align: left; width: 70px; }
+.pbar { position: relative; width: 92px; height: 6px; border-radius: 99px; background: rgb(255 255 255 / 0.06); overflow: hidden; }
+.pbar i { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: linear-gradient(90deg, #6b74e8, var(--accent) 60%, #b3b9ff); box-shadow: 0 0 10px rgb(139 149 255 / 0.5); transition: width 0.35s var(--ease); }
+table.edit td[data-sign] .num input { border-radius: 999px; font-weight: 600; }
+table.edit td[data-sign='pos'] .num input { color: var(--ok); background: var(--ok-soft); }
+table.edit td[data-sign='neg'] .num input { color: var(--bad); background: var(--bad-soft); }
+table.edit td[data-sign='zero'] .num input { color: var(--ink-2); background: rgb(255 255 255 / 0.04); }
+table.edit td[data-sign] .num input:focus { background: var(--s1); }
+
+/* checks */
+table.edit th.chk { text-align: left; }
+.badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px; font: 600 11.5px ui-monospace, 'SF Mono', Menlo, monospace; }
+.badge::before { content: ''; width: 6px; height: 6px; border-radius: 99px; background: currentColor; box-shadow: 0 0 8px currentColor; }
+.badge.ok { color: var(--ok); background: var(--ok-soft); border: 1px solid rgb(110 231 168 / 0.22); }
+.badge.bad { color: var(--bad); background: var(--bad-soft); border: 1px solid rgb(255 143 143 / 0.3); }
+
+/* toggle switch for booleans */
+input.switch {
+  appearance: none; width: 34px; height: 20px; border-radius: 99px; position: relative; cursor: pointer; margin: 0 6px;
+  background: var(--s3); border: 1px solid var(--line-2); transition: background 0.2s, border-color 0.2s;
+}
+input.switch::after {
+  content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 99px;
+  background: var(--ink-3); transition: transform 0.22s var(--ease), background 0.2s;
+}
+input.switch:checked { background: var(--accent-soft); border-color: rgb(139 149 255 / 0.6); }
+input.switch:checked::after { transform: translateX(14px); background: var(--accent); box-shadow: 0 0 8px rgb(139 149 255 / 0.7); }
+
+details.sec[open] > .table-wrap { margin-top: 2px; }
+details.sec > button.add { margin-top: 12px; }
+button.add { border-radius: 99px; }
+
+.params { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 10px; }
 .params label { display: grid; gap: 4px; font-size: 12px; color: var(--ink-2); }
-.params label:first-child { grid-column: span 2; }
+.params label.title { grid-column: 1 / -1; }
 .params input { width: 100%; }
+.params label.param {
+  position: relative; gap: 6px; padding: 14px 14px 12px; border-radius: 12px; overflow: hidden;
+  background: radial-gradient(120% 90% at 0% 0%, var(--accent-soft), transparent 60%), var(--bg);
+  border: 1px solid var(--line); transition: border-color 0.2s, box-shadow 0.2s;
+}
+.params label.param:hover { border-color: rgb(139 149 255 / 0.3); }
+.params label.param:focus-within { border-color: rgb(139 149 255 / 0.55); box-shadow: 0 0 0 3px var(--accent-soft), 0 12px 30px -16px rgb(139 149 255 / 0.5); }
+.params label.param > span { display: flex; align-items: center; gap: 8px; color: var(--ink-2); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; }
+.params label.param b {
+  display: grid; place-items: center; width: 24px; height: 24px; border-radius: 7px; text-transform: none; letter-spacing: 0;
+  font: italic 600 15px 'Times New Roman', Georgia, serif; color: var(--accent); background: var(--accent-soft); border: 1px solid rgb(139 149 255 / 0.25);
+}
+.params label.param > span button { margin-left: auto; }
+.params label.param input {
+  background: transparent; border-color: transparent; padding: 2px 0; border-radius: 6px;
+  font: 600 26px ui-monospace, 'SF Mono', Menlo, monospace; letter-spacing: -0.02em; color: var(--ink);
+}
+.params label.param input:focus { box-shadow: none; background: transparent; border-color: transparent; }
+.params label.param input::-webkit-inner-spin-button { display: none; }
+.params small { color: var(--ink-3); font-size: 11.5px; line-height: 1.4; }
 
 .parts-edit { display: grid; gap: 8px; }
 .part-card { display: grid; gap: 8px; background: var(--s1); border: 1px solid var(--line); border-radius: 10px; padding: 10px; }

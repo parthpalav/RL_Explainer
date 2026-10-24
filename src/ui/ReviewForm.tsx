@@ -3,21 +3,38 @@ import { TASKS, type Problem } from '../schema';
 import { HEADINGS } from '../solvers';
 import { Icon } from './Icon';
 
-type Col<T> = { key: keyof T & string; label: string; kind: 'state' | 'action' | 'number' | 'optnum' | 'text' | 'bool' };
+type Col<T> = {
+  key: keyof T & string;
+  label: ReactNode;
+  kind: 'state' | 'action' | 'number' | 'optnum' | 'text' | 'bool';
+  /** prob: draw a bar for a 0..1 value; signed: tint by sign (rewards, values). */
+  tone?: 'prob' | 'signed';
+  /** Draw an arrow before this column (s, a -> s'). */
+  arrow?: boolean;
+  /** Part of the group key: repeats inside a group are dimmed. */
+  group?: boolean;
+};
 
 interface RowsProps<T> {
   title: ReactNode;
   rows: T[];
   cols: Col<T>[];
   blank: T;
+  /** Rows with the same key sit together in one card. */
+  groupKey?: (r: T) => string;
+  /** Per-group sanity check shown on the first row of each group. */
+  check?: (group: T[]) => { ok: boolean; text: string };
   states: string[];
   actions: string[];
   onChange: (rows: T[]) => void;
 }
 
+const sign = (v: unknown) => (typeof v !== 'number' || !Number.isFinite(v) ? '' : v > 0 ? 'pos' : v < 0 ? 'neg' : 'zero');
+
 /** Generic editable table: one input per cell, add / remove rows. */
-function Rows<T extends Record<string, unknown>>({ title, rows, cols, blank, states, actions, onChange }: RowsProps<T>) {
+function Rows<T extends Record<string, unknown>>({ title, rows, cols, blank, groupKey, check, states, actions, onChange }: RowsProps<T>) {
   const set = (i: number, k: keyof T, v: unknown) => onChange(rows.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
+  const span = cols.length + cols.filter((c) => c.arrow).length + (check ? 4 : 3);
   return (
     <details className="sec" open>
       <summary><span className="sec-title">{title}</span><span className="count">{rows.length}</span><Icon name="chevron" size={16} /></summary>
@@ -25,40 +42,66 @@ function Rows<T extends Record<string, unknown>>({ title, rows, cols, blank, sta
       <table className="edit">
         <thead>
           <tr>
-            {cols.map((c) => <th key={c.key}>{c.label}</th>)}
-            <th />
+            <th className="ix">#</th>
+            {cols.map((c) => [
+              c.arrow && <th key={`${c.key}-arr`} className="arrow" />,
+              <th key={c.key} className={`k-${c.kind}${c.tone ? ` t-${c.tone}` : ''}`}>{c.label}</th>,
+            ])}
+            {check && <th className="chk">Check</th>}
+            <th className="fill" />
+            <th className="rm" />
           </tr>
         </thead>
         <tbody>
-          {rows.map((r, i) => (
-            <tr key={i}>
-              {cols.map((c) => (
-                <td key={c.key}>
-                  {c.kind === 'state' || c.kind === 'action' ? (
-                    <select value={String(r[c.key] ?? '')} onChange={(e) => set(i, c.key, e.target.value)}>
-                      <option value="" />
-                      {(c.kind === 'state' ? states : actions).map((x) => <option key={x}>{x}</option>)}
-                    </select>
-                  ) : c.kind === 'number' || c.kind === 'optnum' ? (
-                    <input
-                      type="number"
-                      step="any"
-                      value={Number.isFinite(r[c.key]) ? String(r[c.key]) : ''}
-                      // empty: NaN fails validation for required numbers, undefined means "not given"
-                      onChange={(e) => set(i, c.key, e.target.value === '' ? (c.kind === 'number' ? NaN : undefined) : e.target.valueAsNumber)}
-                    />
-                  ) : c.kind === 'bool' ? (
-                    <input type="checkbox" checked={!!r[c.key]} onChange={(e) => set(i, c.key, e.target.checked)} />
-                  ) : (
-                    <input value={String(r[c.key] ?? '')} onChange={(e) => set(i, c.key, e.target.value)} />
-                  )}
+          {rows.map((r, i) => {
+            const g = groupKey?.(r);
+            const first = g !== undefined && i > 0 && groupKey!(rows[i - 1]) !== g;
+            const repeat = g !== undefined && i > 0 && groupKey!(rows[i - 1]) === g;
+            const res = check && g !== undefined && !repeat ? check(rows.filter((x) => groupKey!(x) === g)) : null;
+            return [
+              first && <tr key={`gap${i}`} className="gap"><td colSpan={span} /></tr>,
+              <tr key={i} className={repeat ? 'repeat' : undefined}>
+                <td className="ix">{i + 1}</td>
+                {cols.map((c) => {
+                  const v = r[c.key];
+                  return [
+                    c.arrow && <td key={`${c.key}-arr`} className="arrow" aria-hidden="true">→</td>,
+                    <td key={c.key} className={`k-${c.kind}${c.tone ? ` t-${c.tone}` : ''}${c.group ? ' g' : ''}`} data-sign={c.tone === 'signed' ? sign(v) : undefined}>
+                      {c.kind === 'state' || c.kind === 'action' ? (
+                        <select value={String(v ?? '')} onChange={(e) => set(i, c.key, e.target.value)} className={v ? undefined : 'empty'}>
+                          <option value="">—</option>
+                          {(c.kind === 'state' ? states : actions).map((x) => <option key={x}>{x}</option>)}
+                        </select>
+                      ) : c.kind === 'number' || c.kind === 'optnum' ? (
+                        <div className="num">
+                          <input
+                            type="number"
+                            step="any"
+                            value={Number.isFinite(v) ? String(v) : ''}
+                            placeholder={c.kind === 'optnum' ? '—' : '?'}
+                            // empty: NaN fails validation for required numbers, undefined means "not given"
+                            onChange={(e) => set(i, c.key, e.target.value === '' ? (c.kind === 'number' ? NaN : undefined) : e.target.valueAsNumber)}
+                          />
+                          {c.tone === 'prob' && (
+                            <span className="pbar" aria-hidden="true"><i style={{ width: `${Math.max(0, Math.min(1, Number(v) || 0)) * 100}%` }} /></span>
+                          )}
+                        </div>
+                      ) : c.kind === 'bool' ? (
+                        <input type="checkbox" className="switch" checked={!!v} onChange={(e) => set(i, c.key, e.target.checked)} />
+                      ) : (
+                        <input value={String(v ?? '')} onChange={(e) => set(i, c.key, e.target.value)} placeholder="—" />
+                      )}
+                    </td>,
+                  ];
+                })}
+                {check && <td className="chk">{res && <span className={`badge ${res.ok ? 'ok' : 'bad'}`}>{res.text}</span>}</td>}
+                <td className="fill" />
+                <td className="rm">
+                  <button className="icon" onClick={() => onChange(rows.filter((_, j) => j !== i))} aria-label="Remove row"><Icon name="x" size={14} /></button>
                 </td>
-              ))}
-              <td>
-                <button className="icon" onClick={() => onChange(rows.filter((_, j) => j !== i))} aria-label="Remove row"><Icon name="x" size={14} /></button>
-              </td>
-            </tr>
-          ))}
+              </tr>,
+            ];
+          })}
         </tbody>
       </table>
       </div>
@@ -66,6 +109,23 @@ function Rows<T extends Record<string, unknown>>({ title, rows, cols, blank, sta
     </details>
   );
 }
+
+/** Plain-language names for the single numbers a question can give. */
+const PARAMS = {
+  gamma: { sym: 'γ', name: 'Discount factor', hint: 'How much a future reward is worth now (0 to 1).' },
+  alpha: { sym: 'α', name: 'Learning rate', hint: 'Step size of each update.', start: 0.1 },
+  epsilon: { sym: 'ε', name: 'Exploration rate', hint: 'Chance of a random action.', start: 0.1 },
+  n: { sym: 'n', name: 'Steps', hint: 'n-step length, or Dyna-Q planning steps per real step.', start: 2 },
+  c: { sym: 'c', name: 'UCB constant', hint: 'Weight of the exploration bonus.', start: 2 },
+  t: { sym: 't', name: 'UCB time step', hint: 'Time step used in ln t (default: pulls so far).', start: 1 },
+} as const;
+const PARAM_KEYS = ['alpha', 'epsilon', 'n', 'c', 't'] as const;
+
+const sumCheck = (g: { p: number }[]) => {
+  const sum = g.reduce((x, t) => x + (Number.isFinite(t.p) ? t.p : 0), 0);
+  const ok = Math.abs(sum - 1) < 1e-6;
+  return { ok, text: `Σ = ${+sum.toFixed(6)}${ok ? ' ✓' : ' ≠ 1'}` };
+};
 
 const list = (s: string) => s.split(',').map((x) => x.trim()).filter(Boolean);
 
@@ -86,6 +146,8 @@ export function ReviewForm({ draft: d, setDraft, issues, warnings }: Props) {
 
   // Optional data stays hidden until it has rows, so the form only shows what this question uses.
   const has = (k: keyof typeof EXTRA) => (d[k] as unknown[]).length > 0;
+  const shownParams = PARAM_KEYS.filter((k) => d[k] !== undefined);
+  const hiddenParams = PARAM_KEYS.filter((k) => d[k] === undefined);
   const missing = (Object.keys(EXTRA) as (keyof typeof EXTRA)[]).filter((k) => !has(k));
 
   return (
@@ -139,20 +201,33 @@ export function ReviewForm({ draft: d, setDraft, issues, warnings }: Props) {
       </section>
 
       <section className="sec static">
-        <div className="sec-head"><span className="sec-title">Parameters</span></div>
+        <div className="sec-head"><span className="sec-title">Parameters</span><span className="count">{1 + shownParams.length}</span></div>
         <div className="params">
-          <label><span>Title</span> <input value={d.title} onChange={(e) => up({ title: e.target.value })} /></label>
-          <label><span>γ discount</span>
+          <label className="title"><span>Title</span> <input value={d.title} onChange={(e) => up({ title: e.target.value })} /></label>
+          <label className="param">
+            <span><b>γ</b> Discount factor</span>
             <input type="number" step="any" value={Number.isFinite(d.gamma) ? d.gamma : ''}
               onChange={(e) => up({ gamma: e.target.value === '' ? NaN : e.target.valueAsNumber })} />
+            <small>{PARAMS.gamma.hint}</small>
           </label>
-          {(['epsilon', 'alpha', 'n', 'c', 't'] as const).map((k) => (
-            <label key={k}><span>{{ epsilon: 'ε exploration', alpha: 'α step size', n: 'n steps / planning', c: 'c (UCB)', t: 't (UCB time)' }[k]}</span>
-              <input type="number" step="any" value={d[k] ?? ''} placeholder="not given"
-                onChange={(e) => up({ [k]: e.target.value === '' ? undefined : e.target.valueAsNumber })} />
+          {shownParams.map((k) => (
+            <label className="param" key={k}>
+              <span><b>{PARAMS[k].sym}</b> {PARAMS[k].name}
+                <button className="icon" onClick={(e) => { e.preventDefault(); up({ [k]: undefined }); }} aria-label={`Remove ${PARAMS[k].name}`}><Icon name="x" size={12} /></button>
+              </span>
+              <input type="number" step="any" value={d[k] ?? ''} onChange={(e) => up({ [k]: e.target.value === '' ? undefined : e.target.valueAsNumber })} />
+              <small>{PARAMS[k].hint}</small>
             </label>
           ))}
         </div>
+        {hiddenParams.length > 0 && (
+          <div className="more">
+            <span className="muted">Question gives another number?</span>
+            {hiddenParams.map((k) => (
+              <button key={k} className="pill" onClick={() => up({ [k]: PARAMS[k].start })}><Icon name="plus" size={13} /> {PARAMS[k].sym} {PARAMS[k].name}</button>
+            ))}
+          </div>
+        )}
       </section>
 
       <div className="two">
@@ -164,24 +239,28 @@ export function ReviewForm({ draft: d, setDraft, issues, warnings }: Props) {
           onChange={(actions) => up({ actions })} />
       </div>
       {has('transitions') && (
-        <Rows title="Transitions P(s′|s,a), R" rows={d.transitions} {...common} blank={{ s: '', a: '', s2: '', p: NaN, r: NaN }}
-          cols={[{ key: 's', label: 's', kind: 'state' }, { key: 'a', label: 'a', kind: 'action' }, { key: 's2', label: "s'", kind: 'state' },
-            { key: 'p', label: 'P', kind: 'number' }, { key: 'r', label: 'R', kind: 'number' }]}
+        <Rows title="Transitions: probability P(s′|s,a) and reward R" rows={d.transitions} {...common} blank={{ s: '', a: '', s2: '', p: NaN, r: NaN }}
+          groupKey={(t) => `${t.s}|${t.a}`}
+          check={(g) => { const sum = g.reduce((x, t) => x + (Number.isFinite(t.p) ? t.p : 0), 0); const ok = Math.abs(sum - 1) < 1e-6; return { ok, text: `ΣP = ${+sum.toFixed(6)}${ok ? ' ✓' : ' ≠ 1'}` }; }}
+          cols={[{ key: 's', label: 'From s', kind: 'state', group: true }, { key: 'a', label: 'Action a', kind: 'action', group: true },
+            { key: 's2', label: "To s′", kind: 'state', arrow: true }, { key: 'p', label: 'Probability', kind: 'number', tone: 'prob' },
+            { key: 'r', label: 'Reward', kind: 'number', tone: 'signed' }]}
           onChange={(transitions) => up({ transitions })} />
       )}
       {has('policy') && (
         <Rows title="Policy π(a|s)" rows={d.policy} {...common} blank={{ s: '', a: '', p: 1 }}
-          cols={[{ key: 's', label: 's', kind: 'state' }, { key: 'a', label: 'a', kind: 'action' }, { key: 'p', label: 'π(a|s)', kind: 'number' }]}
+          groupKey={(t) => t.s} check={sumCheck}
+          cols={[{ key: 's', label: 'State', kind: 'state', group: true }, { key: 'a', label: 'Action', kind: 'action' }, { key: 'p', label: 'π(a|s)', kind: 'number', tone: 'prob' }]}
           onChange={(policy) => up({ policy })} />
       )}
       {has('V0') && (
         <Rows title="Initial values V₀(s) (missing = 0)" rows={d.V0} {...common} blank={{ s: '', v: 0 }}
-          cols={[{ key: 's', label: 's', kind: 'state' }, { key: 'v', label: 'V₀', kind: 'number' }]}
+          cols={[{ key: 's', label: 'State', kind: 'state' }, { key: 'v', label: 'V₀(s)', kind: 'number', tone: 'signed' }]}
           onChange={(V0) => up({ V0 })} />
       )}
       {has('Q') && (
         <Rows title="Given Q-values" rows={d.Q} {...common} blank={{ s: '', a: '', v: NaN }}
-          cols={[{ key: 's', label: 's', kind: 'state' }, { key: 'a', label: 'a', kind: 'action' }, { key: 'v', label: 'Q(s,a)', kind: 'number' }]}
+          cols={[{ key: 's', label: 'State', kind: 'state' }, { key: 'a', label: 'Action', kind: 'action' }, { key: 'v', label: 'Q(s,a)', kind: 'number', tone: 'signed' }]}
           onChange={(Q) => up({ Q })} />
       )}
       {d.episodes.map((ep, e) => {
@@ -189,7 +268,7 @@ export function ReviewForm({ draft: d, setDraft, issues, warnings }: Props) {
         return (
           <div key={e} className="episode-edit">
             <Rows title={<>Episode {e + 1}: steps (S<sub>t</sub>, A<sub>t</sub>, R<sub>t+1</sub>)</>} rows={ep.steps} {...common} blank={{ s: '', a: '', r: NaN }}
-              cols={[{ key: 's', label: 'S', kind: 'state' }, { key: 'a', label: 'A (optional)', kind: 'action' }, { key: 'r', label: 'R', kind: 'number' }]}
+              cols={[{ key: 's', label: 'S', kind: 'state' }, { key: 'a', label: 'A (optional)', kind: 'action' }, { key: 'r', label: 'Reward', kind: 'number', tone: 'signed' }]}
               onChange={(steps) => setEp({ steps })} />
             <div className="ep-end">
               <label>then ends in
@@ -216,12 +295,13 @@ export function ReviewForm({ draft: d, setDraft, issues, warnings }: Props) {
       )}
       {has('pulls') && (
         <Rows title="Bandit pulls (arm, reward)" rows={d.pulls} {...common} blank={{ a: '', r: NaN }}
-          cols={[{ key: 'a', label: 'arm', kind: 'action' }, { key: 'r', label: 'reward', kind: 'number' }]}
+          cols={[{ key: 'a', label: 'Arm', kind: 'action' }, { key: 'r', label: 'Reward', kind: 'number', tone: 'signed' }]}
           onChange={(pulls) => up({ pulls })} />
       )}
       {has('behavior') && (
         <Rows title="Behaviour policy b(a|s) (off-policy)" rows={d.behavior} {...common} blank={{ s: '', a: '', p: NaN }}
-          cols={[{ key: 's', label: 's', kind: 'state' }, { key: 'a', label: 'a', kind: 'action' }, { key: 'p', label: 'b(a|s)', kind: 'number' }]}
+          groupKey={(t) => t.s} check={sumCheck}
+          cols={[{ key: 's', label: 'State', kind: 'state', group: true }, { key: 'a', label: 'Action', kind: 'action' }, { key: 'p', label: 'b(a|s)', kind: 'number', tone: 'prob' }]}
           onChange={(behavior) => up({ behavior })} />
       )}
       {has('planning') && (
@@ -231,13 +311,13 @@ export function ReviewForm({ draft: d, setDraft, issues, warnings }: Props) {
       )}
       {has('replay') && (
         <Rows title="DQN replay minibatch" rows={d.replay} {...common} blank={{ s: '', a: '', r: NaN, s2: '', done: false }}
-          cols={[{ key: 's', label: 's', kind: 'state' }, { key: 'a', label: 'a', kind: 'action' }, { key: 'r', label: 'r', kind: 'number' },
-            { key: 's2', label: "s'", kind: 'state' }, { key: 'done', label: 'terminal', kind: 'bool' }]}
+          cols={[{ key: 's', label: 's', kind: 'state' }, { key: 'a', label: 'a', kind: 'action' }, { key: 'r', label: 'Reward', kind: 'number', tone: 'signed' },
+            { key: 's2', label: "s′", kind: 'state', arrow: true }, { key: 'done', label: 'Terminal', kind: 'bool' }]}
           onChange={(replay) => up({ replay })} />
       )}
       {has('Qtarget') && (
         <Rows title="DQN target network Q̂(s,a)" rows={d.Qtarget} {...common} blank={{ s: '', a: '', v: NaN }}
-          cols={[{ key: 's', label: 's', kind: 'state' }, { key: 'a', label: 'a', kind: 'action' }, { key: 'v', label: 'Q̂(s,a)', kind: 'number' }]}
+          cols={[{ key: 's', label: 's', kind: 'state' }, { key: 'a', label: 'a', kind: 'action' }, { key: 'v', label: 'Q̂(s,a)', kind: 'number', tone: 'signed' }]}
           onChange={(Qtarget) => up({ Qtarget })} />
       )}
       {has('arms') && (

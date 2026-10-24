@@ -217,6 +217,7 @@ export default function App() {
               <div className="found">
                 {found.map(([n, l]) => <span key={l}><b>{n}</b> {l}</span>)}
                 {Number.isFinite(draft.gamma) && <span><i>γ</i> = {draft.gamma}</span>}
+                {([['α', draft.alpha], ['ε', draft.epsilon], ['n', draft.n], ['c', draft.c]] as const).map(([k, v]) => v !== undefined && Number.isFinite(v) && <span key={k}><i>{k}</i> = {v}</span>)}
               </div>
             )}
             <ReviewForm draft={draft} setDraft={setDraft} issues={issues} warnings={warnings} />
