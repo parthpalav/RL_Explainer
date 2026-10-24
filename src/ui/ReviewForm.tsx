@@ -94,7 +94,7 @@ function Rows<T extends Record<string, unknown>>({ title, rows, cols, blank, gro
                     </td>,
                   ];
                 })}
-                {check && <td className="chk">{res && <span className={`badge ${res.ok ? 'ok' : 'bad'}`}>{res.text}</span>}</td>}
+                {check && <td className="chk">{res && <span className={`sum-badge ${res.ok ? 'ok' : 'bad'}`}>{res.text}</span>}</td>}
                 <td className="fill" />
                 <td className="rm">
                   <button className="icon" onClick={() => onChange(rows.filter((_, j) => j !== i))} aria-label="Remove row"><Icon name="x" size={14} /></button>

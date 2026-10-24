@@ -5,6 +5,8 @@ import { Rich, Tex, texHtml } from './Tex';
 import { Predict, TheoryCards, quizzable } from './Predict';
 import { F } from '../solvers/dp';
 import { Icon } from './Icon';
+import { ABOUT } from '../solvers';
+import { ValueTables, type Shown } from './Panels';
 
 export type Flat = { pi: number; step: Step };
 
@@ -38,9 +40,10 @@ export function StepPlayer({ traces, flat, index, setIndex, onRevealed }: Props)
   const [predict, setPredict] = useState(false);
   const [answered, setAnswered] = useState<Set<number>>(new Set());
   const [score, setScore] = useState({ right: 0, total: 0, streak: 0 });
+  const [answers, setAnswers] = useState(false);
   const cur = flat[index];
   const part = cur ? traces[cur.pi] : undefined;
-  const waiting = predict && !!cur && quizzable(cur.step) && !answered.has(index);
+  const waiting = !answers && predict && !!cur && quizzable(cur.step) && !answered.has(index);
   const pool = useMemo(() => [...new Set([...flat.map((f) => f.step.formula), ...Object.values(F)].filter((f): f is string => !!f))], [flat]);
 
   useEffect(() => setAnswered(new Set()), [flat]);
@@ -48,7 +51,21 @@ export function StepPlayer({ traces, flat, index, setIndex, onRevealed }: Props)
   const go = (i: number, skipAnim = false) => {
     if (i < 0 || i >= flat.length) return;
     instant.current = skipAnim;
+    setAnswers(false);
     setIndex(i);
+  };
+  /** Own pace: the first press finishes the step being animated, the next one moves on. */
+  const forward = () => {
+    if (answers) return;
+    if (!done && tl.current) tl.current.progress(1);
+    else go(index + 1);
+  };
+  const skipToEnd = () => {
+    setPlaying(false);
+    instant.current = true;
+    flyResult.current = false;
+    setAnswers(true);
+    setIndex(flat.length - 1);
   };
 
   useLayoutEffect(() => {
@@ -65,7 +82,7 @@ export function StepPlayer({ traces, flat, index, setIndex, onRevealed }: Props)
       },
     });
     tl.current = t;
-    flyResult.current = !instant.current;
+    flyResult.current = !instant.current && !answers;
     const q = (s: string, el: ParentNode = root) => [...el.querySelectorAll<HTMLElement>(s)];
     const lines = q('.line');
     const kids = (line: HTMLElement) => [...line.children].filter((c) => !c.querySelector(':scope > .note')) as HTMLElement[];
@@ -166,7 +183,7 @@ export function StepPlayer({ traces, flat, index, setIndex, onRevealed }: Props)
     };
     // speed is applied separately below so changing it does not restart the step
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [index, flat, waiting]);
+  }, [index, flat, waiting, answers]);
 
   useEffect(() => {
     tl.current?.timeScale(speed * PACE);
@@ -222,12 +239,13 @@ export function StepPlayer({ traces, flat, index, setIndex, onRevealed }: Props)
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement;
       if (el.closest?.('input, textarea, select') || (e.key === ' ' && el.closest?.('button'))) return;
-      if (e.key === 'ArrowRight') go(index + 1);
-      else if (e.key === 'ArrowLeft') go(index - 1, true);
+      if (e.key === 'ArrowRight') forward();
+      else if (e.key === 'ArrowLeft') go(answers ? index : index - 1, true);
       else if (e.key === ' ') {
         e.preventDefault();
         setPlaying((x) => !x);
-      } else return;
+      } else if (e.key === 'End') skipToEnd();
+      else return;
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -256,6 +274,7 @@ export function StepPlayer({ traces, flat, index, setIndex, onRevealed }: Props)
       </nav>
 
       <div className="stage">
+        <AlgoBanner part={part} />
         {part.part.text && (
           <p className="part-text">
             <span className="eyebrow">Question {part.part.label ? `(${part.part.label})` : ''}</span>
@@ -266,7 +285,8 @@ export function StepPlayer({ traces, flat, index, setIndex, onRevealed }: Props)
           <div className="bar" style={{ width: `${pct}%` }} />
         </div>
 
-        <div className="card" ref={card} key={`${index}-${waiting}`}>
+        <div className={`card${answers ? ' answers' : ''}`} ref={card} key={`${index}-${waiting}-${answers}`}>
+          {answers ? <Answers traces={traces} onOpen={(pi) => go(flat.findIndex((f) => f.pi === pi), true)} /> : <>
           <header>
             <span className="eyebrow">Step {posInPart + 1} of {partSteps.length}</span>
             <h3><Rich text={step.title} /></h3>
@@ -311,28 +331,34 @@ export function StepPlayer({ traces, flat, index, setIndex, onRevealed }: Props)
               )}
             </>
           )}
+          </>}
         </div>
       </div>
 
       <div className="transport">
         <div className="tgroup">
-          <button className="round" onClick={() => go(index - 1, true)} disabled={index === 0} title="Previous step (←)" aria-label="Previous step">
-            <Icon name="prev" />
-          </button>
-          <button className="round play" onClick={() => setPlaying((x) => !x)} title="Play / pause (space)" aria-label={playing ? 'Pause' : 'Play'}>
+          <button className="round play" onClick={() => setPlaying((x) => !x)} disabled={answers} title="Play / pause (space)" aria-label={playing ? 'Pause' : 'Play'}>
             <Icon name={playing ? 'pause' : 'play'} size={20} />
           </button>
-          <button className="round" onClick={() => go(index + 1)} disabled={index === flat.length - 1} title="Next step (→)" aria-label="Next step">
-            <Icon name="next" />
-          </button>
-          <button className="round subtle" onClick={() => tl.current?.restart()} title="Replay this step" aria-label="Replay this step">
+          <button className="round subtle" onClick={() => tl.current?.restart()} disabled={answers} title="Replay this step" aria-label="Replay this step">
             <Icon name="replay" size={17} />
           </button>
         </div>
-        <div className="seg" role="radiogroup" aria-label="Speed">
-          {SPEEDS.map((s) => (
-            <button key={s} role="radio" aria-checked={speed === s} className={speed === s ? 'on' : ''} onClick={() => setSpeed(s)}>{s}×</button>
-          ))}
+        <div className="pace">
+          <button className="pace-btn" onClick={() => go(answers ? index : index - 1, true)} disabled={index === 0 && !answers} title="Back one step (←)">
+            <Icon name="prev" size={16} /> Back
+          </button>
+          <div className="seg" role="radiogroup" aria-label="Speed">
+            {SPEEDS.map((s) => (
+              <button key={s} role="radio" aria-checked={speed === s} className={speed === s ? 'on' : ''} onClick={() => setSpeed(s)}>{s}×</button>
+            ))}
+          </div>
+          <button className="pace-btn" onClick={forward} disabled={answers || (index === flat.length - 1 && done)} title="Forward one step; finishes the current animation first (→)">
+            {done ? 'Next' : 'Finish step'} <Icon name="next" size={16} />
+          </button>
+          <button className={`pace-btn skip${answers ? ' on' : ''}`} onClick={skipToEnd} title="Skip to the end and show only the answers (End)">
+            Answers <Icon name="skip" size={16} />
+          </button>
         </div>
         <label className="switch" title="Guess the formula and the value before each calculation is shown">
           <input type="checkbox" checked={predict} onChange={(e) => setPredict(e.target.checked)} />
@@ -344,7 +370,7 @@ export function StepPlayer({ traces, flat, index, setIndex, onRevealed }: Props)
             <Icon name="target" size={15} /> {score.right}/{score.total}{score.streak > 1 ? ` · streak ${score.streak}` : ''}
           </span>
         )}
-        <span className="keys" aria-hidden="true"><kbd>←</kbd><kbd>→</kbd><kbd>space</kbd></span>
+        <span className="keys" aria-hidden="true"><kbd>←</kbd><kbd>→</kbd><kbd>space</kbd><kbd>End</kbd></span>
       </div>
 
       <ol className="steps" aria-label="Steps in this part">
@@ -358,5 +384,57 @@ export function StepPlayer({ traces, flat, index, setIndex, onRevealed }: Props)
         ))}
       </ol>
     </section>
+  );
+}
+
+/** Which algorithm this part uses, in plain words, with its update rule. */
+function AlgoBanner({ part }: { part: PartTrace }) {
+  const about = ABOUT[part.part.task];
+  // the update rule this part applies most often (a pick step like argmax can come first)
+  const count = new Map<string, number>();
+  for (const s of part.steps) if (s.formula) count.set(s.formula, (count.get(s.formula) ?? 0) + 1);
+  const formula = [...count].sort((x, y) => y[1] - x[1])[0]?.[0];
+  return (
+    <div className="algo">
+      <div className="algo-head">
+        <span className="algo-family">{about.family}</span>
+        <h2 className="algo-name">{part.heading}</h2>
+      </div>
+      <p className="algo-what">{about.what}</p>
+      {formula && <div className="algo-formula"><Tex tex={formula} /></div>}
+    </div>
+  );
+}
+
+/** The final value of every cell each part computed, or its conclusion when it computes none. */
+function Answers({ traces, onOpen }: { traces: PartTrace[]; onOpen: (pi: number) => void }) {
+  return (
+    <div className="answer-list">
+      <header>
+        <span className="eyebrow">Skipped to the end</span>
+        <h3>Answers</h3>
+      </header>
+      {traces.map((t, pi) => {
+        const last = new Map<string, Shown>();
+        for (const st of t.steps) for (const r of st.results) last.set(`${r.cell.table}\u0000${r.cell.row}\u0000${r.cell.col}`, { ...r, fresh: false });
+        const end = t.steps.at(-1);
+        const concl = end && !end.results.length ? end.lines.at(-1) : undefined;
+        const lhs = [...(end?.lines ?? [])].reverse().find((l) => l.lhs)?.lhs;
+        return (
+          <section className="answer" key={pi}>
+            <div className="answer-head">
+              <span className="badge">{t.part.label || pi + 1}</span>
+              <span className="h">{t.heading}</span>
+              <button className="ghost small" onClick={() => onOpen(pi)}>Show working <Icon name="next" size={14} /></button>
+            </div>
+            {t.part.text && <p className="muted">{t.part.text}</p>}
+            {t.error && <p className="answer-err">{t.error}</p>}
+            {concl && <div className="answer-line"><Tex tex={`${lhs ? `${lhs} = ` : ''}${concl.rhs}`} /></div>}
+            {!concl && end && !last.size && <p className="muted">{end.title}</p>}
+            {last.size > 0 && <div className="answer-tables"><ValueTables shown={[...last.values()]} /></div>}
+          </section>
+        );
+      })}
+    </div>
   );
 }

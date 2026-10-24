@@ -180,8 +180,8 @@ export function DataPanel({ p, active, focus }: { p: Problem; active: string[]; 
 
 export type Shown = { cell: Cell; value: number | string; fresh: boolean };
 
-/** Running tables of every value computed so far. */
-export function ResultsPanel({ shown }: { shown: Shown[] }) {
+/** Values grouped into one table per cell.table; refs makes cells fly-in sources for later steps. */
+export function ValueTables({ shown, refs = false }: { shown: Shown[]; refs?: boolean }) {
   const tables = new Map<string, { rows: string[]; cols: string[]; vals: Map<string, Shown> }>();
   for (const s of shown) {
     const t = tables.get(s.cell.table) ?? { rows: [] as string[], cols: [] as string[], vals: new Map<string, Shown>() };
@@ -191,9 +191,7 @@ export function ResultsPanel({ shown }: { shown: Shown[] }) {
     t.vals.set(`${s.cell.row}\u0000${s.cell.col}`, s);
   }
   return (
-    <aside className="panel results">
-      <h2 className="side-h"><i className="sw fresh" /> Worked values</h2>
-      {!tables.size && <p className="empty">Each value lands here as soon as its step is solved, so you can build the answer table as you go.</p>}
+    <>
       {[...tables].map(([name, t]) => (
         <table key={name}>
           <caption><Tex tex={name} /></caption>
@@ -212,7 +210,7 @@ export function ResultsPanel({ shown }: { shown: Shown[] }) {
                   return (
                     <td key={c} className={s?.fresh ? 'fresh-cell' : ''}>
                       {s && (
-                        <span className="val" data-ref={domRef(cellRef(s.cell))} data-tex={refTex(cellRef(s.cell))}>
+                        <span className="val" {...(refs ? { 'data-ref': domRef(cellRef(s.cell)), 'data-tex': refTex(cellRef(s.cell)) } : {})}>
                           {typeof s.value === 'number' ? fmt(s.value) : <Tex tex={s.value} />}
                         </span>
                       )}
@@ -224,6 +222,17 @@ export function ResultsPanel({ shown }: { shown: Shown[] }) {
           </tbody>
         </table>
       ))}
+    </>
+  );
+}
+
+/** Running tables of every value computed so far. */
+export function ResultsPanel({ shown }: { shown: Shown[] }) {
+  return (
+    <aside className="panel results">
+      <h2 className="side-h"><i className="sw fresh" /> Worked values</h2>
+      {!shown.length && <p className="empty">Each value lands here as soon as its step is solved, so you can build the answer table as you go.</p>}
+      <ValueTables shown={shown} refs />
     </aside>
   );
 }

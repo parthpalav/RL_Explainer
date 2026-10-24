@@ -4,6 +4,8 @@ const PATHS = {
   pause: 'M8 5v14M16 5v14',
   prev: 'M15 6l-6 6 6 6',
   next: 'M9 6l6 6-6 6',
+  skip: 'M5 6l6 6-6 6M12 6l6 6-6 6M20 5v14',
+  back: 'M14 6l-6 6 6 6M19 6l-6 6 6 6',
   replay: 'M4 12a8 8 0 1 0 2.4-5.7M4 4v4.5h4.5',
   edit: 'M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4',
   spark: 'M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6',
